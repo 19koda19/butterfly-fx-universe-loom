@@ -1,7 +1,7 @@
 {
   "name": "butterfly-fx-universe-loom",
-  "version": "1.1.0",
-  "description": "A GPU-accelerated p5.js cosmogenesis instrument: draw through the Mandelbrot set and grow deterministic universes.",
+  "version": "1.2.0",
+  "description": "A GPU-accelerated p5.js cosmogenesis instrument: draw through Mandelbrot or Buddhabrot space and grow deterministic universes.",
   "main": "electron/main.cjs",
   "author": "Butterfly FX",
   "license": "MIT",
@@ -17,7 +17,7 @@
     "pages:prepare": "node scripts/prepare-pages.cjs",
     "test": "node --test",
     "smoke": "electron scripts/smoke-electron.cjs",
-    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check src/simulation.js && node --check src/shaders.js && node --check src/app.js && node --test",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check src/simulation.js && node --check src/shaders.js && node --check src/buddhabrot.js && node --check src/app.js && node --test",
     "prebuild": "node scripts/copy-vendor.cjs",
     "build": "electron-builder --dir",
     "dist": "electron-builder"

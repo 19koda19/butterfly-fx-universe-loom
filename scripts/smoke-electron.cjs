@@ -59,7 +59,10 @@ app.whenReady().then(async () => {
   window.webContents.on('console-message', (details) => {
     const level = details.level || 'info';
     const message = details.message || '';
-    if (level === 'error' || /error|failed/i.test(message)) errors.add(`${level}: ${message}`);
+    const location = details.sourceId
+      ? ` (${details.sourceId}${details.lineNumber ? `:${details.lineNumber}` : ''})`
+      : '';
+    if (level === 'error' || /error|failed/i.test(message)) errors.add(`${level}: ${message}${location}`);
   });
   window.webContents.on('did-fail-load', (_event, code, description) => {
     errors.add(`load ${code}: ${description}`);
@@ -118,13 +121,21 @@ app.whenReady().then(async () => {
 
   const screenshotPath = path.join('/tmp', 'butterfly-fx-smoke.png');
   const fullScreenshotPath = path.join('/tmp', 'butterfly-fx-full.png');
+  const mandelbrotCinematicScreenshotPath = path.join('/tmp', 'butterfly-fx-mandelbrot-cinematic.png');
+  const buddhabrotScreenshotPath = path.join('/tmp', 'butterfly-fx-buddhabrot.png');
   const zoomScreenshotPath = path.join('/tmp', 'butterfly-fx-universe-zoom.png');
   const screensaverScreenshotPath = path.join('/tmp', 'butterfly-fx-screensaver.png');
+  let buddhabrotReport = null;
+  let mandelbrotCinematicReport = null;
+  let annularReport = null;
   let screensaverReport = null;
   let compositionReport = null;
   let zoomReport = null;
+  let wheelReport = null;
+  let panReport = null;
   let cameraPersistenceReport = null;
   expect(report.canvasCount === 1, 'exactly one p5 canvas should exist');
+  expect(report.engine?.sourceVisual === 'mandelbrot', 'Mandelbrot should be the default source microscope');
   expect(report.engine?.universeCount >= 1 || !gpuSmoke, 'draw gesture should create a universe in GPU mode');
   expect(!report.engine?.shaderError, 'shader initialization should complete without an error');
   const canvasDataUrl = await window.webContents.executeJavaScript(`document.querySelector('canvas')?.toDataURL('image/png') || null`);
@@ -137,6 +148,80 @@ app.whenReady().then(async () => {
     try {
       const fullImage = await window.webContents.capturePage();
       await fs.writeFile(fullScreenshotPath, fullImage.toPNG());
+
+      await window.webContents.executeJavaScript(`document.querySelector('#screensaver-button').click(); document.querySelector('#start-screensaver').click();`);
+      await new Promise((resolve) => setTimeout(resolve, 6100));
+      mandelbrotCinematicReport = await window.webContents.executeJavaScript(`(() => {
+        const engine = window.ButterflyFXDiagnostics.status();
+        const target = engine.screensaverFractalTarget;
+        return {
+          active: engine.screensaverActive,
+          sourceVisual: engine.sourceVisual,
+          sourceTitle: document.querySelector('#source-stage-title')?.textContent,
+          home: engine.screensaverFractalHome,
+          target,
+          view: engine.fractalView,
+          camera: engine.universeCamera,
+          targetSample: target ? window.CosmoMath.mandelbrotSample(target.x, target.y, 180) : null
+        };
+      })()`);
+      expect(mandelbrotCinematicReport.active, 'default Mandelbrot cinematic should enter Autogen');
+      expect(mandelbrotCinematicReport.sourceVisual === 'mandelbrot' && /MANDELBROT/i.test(mandelbrotCinematicReport.sourceTitle || ''), 'Autogen should keep Mandelbrot as the default source microscope');
+      expect(mandelbrotCinematicReport.target?.scale < mandelbrotCinematicReport.home?.scale / 3, 'default Mandelbrot cinematic should make a deep boundary dive');
+      expect(mandelbrotCinematicReport.targetSample && !mandelbrotCinematicReport.targetSample.interior, 'default Mandelbrot cinematic should favor an escaped boundary-detail point');
+      expect(Boolean(mandelbrotCinematicReport.camera?.inspectId), 'default Mandelbrot cinematic should pair its source dive with a galaxy target');
+      const mandelbrotCinematicImage = await window.webContents.capturePage();
+      await fs.writeFile(mandelbrotCinematicScreenshotPath, mandelbrotCinematicImage.toPNG());
+      await window.webContents.executeJavaScript(`document.querySelector('#screensaver-exit').click()`);
+      // Electron can report the click before the native fullscreen transition and
+      // follow-up canvas resize have settled. Pointer tests need stable bounds.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      await window.webContents.executeJavaScript(`document.querySelector('[data-source-visual="buddhabrot"]').click()`);
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      const initialBuddhabrot = await window.webContents.executeJavaScript(`(() => {
+        const engine = window.ButterflyFXDiagnostics.status();
+        const button = document.querySelector('[data-source-visual="buddhabrot"]');
+        return {
+          sourceVisual: engine.sourceVisual,
+          renderer: engine.buddhabrot,
+          active: button?.classList.contains('is-active'),
+          pressed: button?.getAttribute('aria-pressed'),
+          title: document.querySelector('#source-stage-title')?.textContent,
+          sourceState: document.querySelector('#source-state')?.textContent,
+          toast: document.querySelector('#toast')?.textContent
+        };
+      })()`);
+      await new Promise((resolve) => setTimeout(resolve, 1350));
+      await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics?.renderOnce()`);
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      const sustainedBuddhabrot = await window.webContents.executeJavaScript(`(() => {
+        const engine = window.ButterflyFXDiagnostics.status();
+        const button = document.querySelector('[data-source-visual="buddhabrot"]');
+        return {
+          sourceVisual: engine.sourceVisual,
+          renderer: engine.buddhabrot,
+          active: button?.classList.contains('is-active'),
+          pressed: button?.getAttribute('aria-pressed'),
+          title: document.querySelector('#source-stage-title')?.textContent,
+          sourceState: document.querySelector('#source-state')?.textContent,
+          toast: document.querySelector('#toast')?.textContent
+        };
+      })()`);
+      buddhabrotReport = { initial: initialBuddhabrot, sustained: sustainedBuddhabrot, final: null };
+      expect(initialBuddhabrot.sourceVisual === 'buddhabrot' && initialBuddhabrot.active && initialBuddhabrot.pressed === 'true', 'BUDDHABROT control should activate the orbit-density source');
+      expect(sustainedBuddhabrot.sourceVisual === 'buddhabrot' && sustainedBuddhabrot.active && sustainedBuddhabrot.pressed === 'true', 'Buddhabrot should stay active while its GPU accumulator advances');
+      expect(sustainedBuddhabrot.renderer?.supported === true, 'Buddhabrot renderer should report WebGL2 support');
+      expect(!sustainedBuddhabrot.renderer?.error, 'Buddhabrot renderer should remain error-free');
+      expect(sustainedBuddhabrot.renderer?.samples > 0, 'Buddhabrot should accumulate nonzero parameter samples');
+      expect(sustainedBuddhabrot.renderer?.escapedSamples > 0, 'Buddhabrot should accumulate escaped parameter samples');
+      expect(sustainedBuddhabrot.renderer?.orbitPoints > 0, 'Buddhabrot should draw nonzero escaped-orbit points');
+      expect(sustainedBuddhabrot.renderer?.batches > 0, 'Buddhabrot should complete at least one accumulation batch');
+      expect(sustainedBuddhabrot.renderer?.samples > (initialBuddhabrot.renderer?.samples || 0), 'Buddhabrot sample count should advance while the source remains active');
+      expect(Boolean(sustainedBuddhabrot.renderer?.accumulationFormat), 'Buddhabrot should expose its GPU accumulation format');
+      expect(/BUDDHABROT/i.test(sustainedBuddhabrot.title || '') && /Z-ORBIT/i.test(sustainedBuddhabrot.sourceState || ''), 'Buddhabrot stage UI should expose orbit-density status');
+      const buddhabrotImage = await window.webContents.capturePage();
+      await fs.writeFile(buddhabrotScreenshotPath, buddhabrotImage.toPNG());
 
       await window.webContents.executeJavaScript(`document.querySelector('#focus-view-button').click()`);
       await new Promise((resolve) => setTimeout(resolve, 220));
@@ -154,7 +239,16 @@ app.whenReady().then(async () => {
         };
       })()`);
       window.webContents.sendInputEvent({ type: 'mouseMove', x: zoomGeometry.x, y: zoomGeometry.y });
-      await window.webContents.executeJavaScript(`document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', {
+      await window.webContents.executeJavaScript(`window.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: ${zoomGeometry.x},
+        clientY: ${zoomGeometry.y},
+        bubbles: true,
+        cancelable: true
+      }))`);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const pointerBeforeWheel = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status().pointer`);
+      await window.webContents.executeJavaScript(`window.dispatchEvent(new WheelEvent('wheel', {
+        deltaX: 0,
         deltaY: -420,
         deltaMode: 0,
         clientX: ${zoomGeometry.x},
@@ -164,16 +258,39 @@ app.whenReady().then(async () => {
       }))`);
       await new Promise((resolve) => setTimeout(resolve, 950));
       const afterWheel = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
-      expect(afterWheel.universeCamera.zoom > zoomGeometry.before.zoom * 1.2, 'wheel over the universe should increase universe magnification');
+      wheelReport = { pointer: pointerBeforeWheel, target: { x: zoomGeometry.x, y: zoomGeometry.y }, before: zoomGeometry.before, after: afterWheel.universeCamera };
+      expect(afterWheel.universeCamera.targetScale < zoomGeometry.before.targetScale * 0.8, 'wheel over the universe should increase universe magnification');
       expect(JSON.stringify(afterWheel.fractalView) === JSON.stringify(zoomGeometry.fractalView), 'universe zoom must not alter the Mandelbrot camera');
 
       window.webContents.sendInputEvent({ type: 'mouseDown', x: zoomGeometry.x, y: zoomGeometry.y, button: 'left', clickCount: 1 });
-      window.webContents.sendInputEvent({ type: 'mouseMove', x: zoomGeometry.x + 76, y: zoomGeometry.y + 38, movementX: 76, movementY: 38, button: 'left' });
+      await new Promise((resolve) => setTimeout(resolve, 45));
+      const panStart = await window.webContents.executeJavaScript(`({ pointer: window.ButterflyFXDiagnostics.status().pointer, active: window.ButterflyFXDiagnostics.status().cosmosPanning })`);
+      for (let step = 1; step <= 5; step += 1) {
+        window.webContents.sendInputEvent({
+          type: 'mouseMove',
+          x: zoomGeometry.x + Math.round(76 * step / 5),
+          y: zoomGeometry.y + Math.round(38 * step / 5),
+          movementX: Math.round(76 / 5),
+          movementY: Math.round(38 / 5),
+          button: 'left'
+        });
+        await new Promise((resolve) => setTimeout(resolve, 28));
+      }
       window.webContents.sendInputEvent({ type: 'mouseUp', x: zoomGeometry.x + 76, y: zoomGeometry.y + 38, button: 'left', clickCount: 1 });
+      await window.webContents.executeJavaScript(`window.dispatchEvent(new MouseEvent('mouseup', {
+        button: 0,
+        buttons: 0,
+        clientX: ${zoomGeometry.x + 76},
+        clientY: ${zoomGeometry.y + 38},
+        bubbles: true,
+        cancelable: true
+      }))`);
       await new Promise((resolve) => setTimeout(resolve, 180));
       const afterPan = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+      panReport = { start: panStart, released: !afterPan.cosmosPanning, before: afterWheel.universeCamera, after: afterPan.universeCamera };
       expect(Math.abs(afterPan.universeCamera.x - afterWheel.universeCamera.x) > 0.001
         || Math.abs(afterPan.universeCamera.y - afterWheel.universeCamera.y) > 0.001, 'dragging inside the universe should pan its camera');
+      expect(!afterPan.cosmosPanning, 'universe pan should finish on mouse release');
 
       await window.webContents.executeJavaScript(`document.querySelector('#cosmos-camera-reset').click()`);
       await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -185,14 +302,28 @@ app.whenReady().then(async () => {
       zoomReport = await window.webContents.executeJavaScript(`({
         camera: window.ButterflyFXDiagnostics.status().universeCamera,
         focusView: window.ButterflyFXDiagnostics.status().focusView,
+        inspectedGalaxy: window.ButterflyFXDiagnostics.status().inspectedGalaxy,
         label: document.querySelector('#cosmos-zoom-level')?.textContent,
         target: document.querySelector('#cosmos-target-label')?.textContent,
         reason: document.querySelector('#cosmos-target-reason')?.textContent,
+        evidence: document.querySelector('#cosmos-target-evidence')?.textContent,
+        evidenceVisible: !document.querySelector('#cosmos-target-evidence')?.hidden,
+        inspectButton: document.querySelector('#inspect-tension')?.textContent,
+        selectedRings: document.querySelector('#selected-rings')?.textContent,
+        selectedRingChannel: document.querySelector('#selected-ring-channel')?.textContent,
         cameraVisible: !document.querySelector('#cosmos-camera')?.hidden
       })`);
+      annularReport = zoomReport;
       expect(zoomReport.camera.zoom > 20, 'odd-galaxy inspector should dive beyond 20x');
       expect(Boolean(zoomReport.camera.inspectId), 'odd-galaxy inspector should identify a galaxy');
       expect(/TENSION/i.test(zoomReport.target || ''), 'zoom panel should expose formation tension explicitly');
+      expect(zoomReport.inspectedGalaxy?.id === zoomReport.camera.inspectId, 'annular inspector diagnostics should match the camera target');
+      expect(zoomReport.inspectedGalaxy?.morphology?.family === 'ANNULAR', 'INSPECT STRANGE RING should target a generated annular galaxy');
+      expect(zoomReport.inspectedGalaxy?.haloProxy?.model === 'TOY_HALO_PROXY', 'inspected annular galaxy should carry its toy halo proxy');
+      expect(/RING|ANNULUS|ANNULAR/i.test(`${zoomReport.target || ''} ${zoomReport.inspectButton || ''}`), 'annular inspection UI should identify the ring morphology');
+      expect(Number.parseInt(zoomReport.selectedRings, 10) > 0, 'selected universe UI should report generated ring systems');
+      expect(Boolean(zoomReport.selectedRingChannel) && zoomReport.selectedRingChannel !== '—', 'selected universe UI should expose an annular formation channel');
+      expect(zoomReport.evidenceVisible && /HALO|OFFSET|SUPPORT|CHANNEL|DARK/i.test(`${zoomReport.reason || ''} ${zoomReport.evidence || ''}`), 'annular camera UI should expose halo or formation-channel evidence');
       const zoomImage = await window.webContents.capturePage();
       await fs.writeFile(zoomScreenshotPath, zoomImage.toPNG());
 
@@ -246,6 +377,19 @@ app.whenReady().then(async () => {
       expect(compositionReport.universeOnly.state === 'universe' && compositionReport.universeOnly.sourceHidden, 'universe-only composition should fill the instrument');
       expect(compositionReport.mandelbrotOnly.state === 'mandelbrot' && compositionReport.mandelbrotOnly.universeHidden, 'Mandelbrot-only composition should hide the universe');
       expect(compositionReport.restored === 'both', 'composition cycle should restore the relational view');
+      buddhabrotReport.final = await window.webContents.executeJavaScript(`(() => {
+        const engine = window.ButterflyFXDiagnostics.status();
+        const button = document.querySelector('[data-source-visual="buddhabrot"]');
+        return {
+          sourceVisual: engine.sourceVisual,
+          renderer: engine.buddhabrot,
+          active: button?.classList.contains('is-active'),
+          pressed: button?.getAttribute('aria-pressed')
+        };
+      })()`);
+      expect(buddhabrotReport.final.sourceVisual === 'buddhabrot' && buddhabrotReport.final.active, 'Buddhabrot should remain selected through zoom, Autogen, archive, and composition checks');
+      expect(buddhabrotReport.final.renderer?.samples >= sustainedBuddhabrot.renderer?.samples, 'Buddhabrot accumulation should persist across the full interaction flow');
+      expect(!buddhabrotReport.final.renderer?.error, 'Buddhabrot should finish the smoke flow without a renderer error');
     } catch (error) {
       errors.add(`Full-window capture failed: ${error.message}`);
     }
@@ -253,13 +397,20 @@ app.whenReady().then(async () => {
   const reportPath = path.join('/tmp', 'butterfly-fx-smoke-report.json');
   const payload = {
     report,
+    mandelbrotCinematicReport,
+    buddhabrotReport,
+    annularReport,
     zoomReport,
+    wheelReport,
+    panReport,
     screensaverReport,
     cameraPersistenceReport,
     compositionReport,
     errors: [...errors],
     screenshotPath,
     fullScreenshotPath,
+    mandelbrotCinematicScreenshotPath,
+    buddhabrotScreenshotPath,
     zoomScreenshotPath,
     screensaverScreenshotPath,
     reportPath

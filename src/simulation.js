@@ -365,27 +365,311 @@
     return normalizeAttractor(points);
   }
 
+  const ANNULAR_SUBTYPES = Object.freeze([
+    'COLLISIONAL_RING',
+    'POLAR_RING',
+    'RESONANCE_RING',
+    'HOAG_LIKE',
+    'UNRESOLVED_ANNULUS'
+  ]);
+
+  const ANNULAR_LABELS = Object.freeze({
+    COLLISIONAL_RING: 'COLLISIONAL RING',
+    POLAR_RING: 'POLAR RING',
+    RESONANCE_RING: 'RESONANCE RING',
+    HOAG_LIKE: 'HOAG-LIKE RING',
+    UNRESOLVED_ANNULUS: 'UNRESOLVED ANNULUS'
+  });
+
+  function isAnnularGalaxy(galaxy) {
+    return galaxy?.morphology?.family === 'ANNULAR';
+  }
+
+  function taggedGalaxyRandom(genome, galaxy, tag) {
+    const seedHex = genome.seedHex || (genome.seed >>> 0).toString(16).padStart(8, '0');
+    return mulberry32(fnv1a(`${seedHex}|${galaxy.id}|${tag}`));
+  }
+
+  function weightedChoice(random, choices) {
+    const total = choices.reduce((sum, choice) => sum + Math.max(0, choice.weight), 0);
+    let cursor = random() * Math.max(1e-9, total);
+    for (const choice of choices) {
+      cursor -= Math.max(0, choice.weight);
+      if (cursor <= 0) return choice.value;
+    }
+    return choices[choices.length - 1].value;
+  }
+
+  function axialAlignment(a, b) {
+    return Math.abs(Math.cos(a - b));
+  }
+
+  function normalizeAngle(angle) {
+    return ((angle % TAU) + TAU) % TAU;
+  }
+
+  function annularTargetCount(genome, count) {
+    if (count < 6) return 0;
+    const { metrics } = genome;
+    const ringSignal = clamp(
+      metrics.peakSeeds * 0.3
+      + metrics.turbulence * 0.26
+      + metrics.spin * 0.24
+      + metrics.density * 0.2
+    );
+    const fraction = 0.1 + ringSignal * 0.08;
+    return Math.max(1, Math.min(count, Math.round(count * fraction)));
+  }
+
+  function ringCandidateScore(genome, galaxy) {
+    const random = taggedGalaxyRandom(genome, galaxy, 'annular-candidate@1');
+    const { metrics } = genome;
+    const massCeiling = 0.6 + metrics.density * 1.7;
+    const massLoad = clamp(galaxy.mass / Math.max(0.001, massCeiling));
+    const satelliteSignal = clamp(galaxy.satelliteCount / 7);
+    return random() * 0.58
+      + galaxy.mergerScars * 0.13
+      + massLoad * 0.08
+      + satelliteSignal * 0.07
+      + metrics.peakSeeds * 0.06
+      + metrics.turbulence * 0.05
+      + metrics.spin * 0.03;
+  }
+
+  function deriveHaloProxy(genome, galaxy) {
+    const random = taggedGalaxyRandom(genome, galaxy, 'halo-proxy@1');
+    const { genes, metrics } = genome;
+    const massCeiling = 0.6 + metrics.density * 1.7;
+    const massLoad = clamp(galaxy.mass / Math.max(0.001, massCeiling));
+    const darkMatterLoad = clamp((genes.darkMatterRatio - 4.1) / 2.3);
+    const concentration = clamp(
+      0.26 + metrics.density * 0.38 + massLoad * 0.18
+      + darkMatterLoad * 0.08 - metrics.voidBias * 0.1 + (random() - 0.5) * 0.16
+    );
+    const axisRatio = clamp(
+      0.57 + (1 - metrics.turbulence) * 0.16 + random() * 0.24,
+      0.52,
+      0.98
+    );
+    const rotation = random() * TAU;
+    const offsetMagnitude = clamp(
+      0.018 + metrics.turbulence * 0.1 + galaxy.mergerScars * 0.22
+      + metrics.voidBias * 0.06 + (random() - 0.5) * 0.07,
+      0,
+      0.48
+    );
+    const offsetAngle = random() * TAU;
+    return {
+      model: 'TOY_HALO_PROXY',
+      radiusScale: 2.75 + massLoad * 1.25 + metrics.density * 0.65
+        + darkMatterLoad * 0.35 + random() * 0.45,
+      concentration,
+      axisRatio,
+      rotation,
+      offsetX: Math.cos(offsetAngle) * offsetMagnitude,
+      offsetY: Math.sin(offsetAngle) * offsetMagnitude,
+      offsetMagnitude,
+      luminousAlignment: axialAlignment(rotation, galaxy.rotation),
+      ringPlaneSupport: 1,
+      formationSupport: 1,
+      anomalyScore: 0
+    };
+  }
+
+  function deriveLegacyMorphology(galaxy) {
+    return {
+      family: galaxy.type,
+      subtype: galaxy.type,
+      label: galaxy.type,
+      formationChannel: 'LEGACY_MORPHOLOGY',
+      annularity: 0,
+      ringRadius: 0,
+      ringWidth: 0,
+      gapFraction: 0,
+      completeness: 0,
+      coreFraction: galaxy.coreSize,
+      coreOffsetX: 0,
+      coreOffsetY: 0,
+      axisRatio: galaxy.ellipticity,
+      planeAngle: galaxy.rotation,
+      secondaryRing: 0,
+      driverStrength: 1
+    };
+  }
+
+  function deriveAnnularMorphology(genome, galaxy, haloProxy) {
+    const random = taggedGalaxyRandom(genome, galaxy, 'annular-morphology@1');
+    const { metrics } = genome;
+    const satelliteSignal = clamp(galaxy.satelliteCount / 7);
+    const haloOffset = clamp(haloProxy.offsetMagnitude / 0.48);
+    const diskHaloMisalignment = 1 - haloProxy.luminousAlignment;
+    const driverSignals = {
+      COLLISIONAL_RING: clamp(
+        galaxy.mergerScars * 0.5 + metrics.turbulence * 0.2
+        + satelliteSignal * 0.18 + haloOffset * 0.12
+      ),
+      POLAR_RING: clamp(
+        diskHaloMisalignment * 0.42 + metrics.spin * 0.24
+        + satelliteSignal * 0.16 + haloProxy.concentration * 0.18
+      ),
+      RESONANCE_RING: clamp(
+        metrics.spin * 0.4 + (1 - metrics.turbulence) * 0.28
+        + (1 - galaxy.mergerScars) * 0.2 + haloProxy.concentration * 0.12
+      ),
+      HOAG_LIKE: clamp(
+        (1 - galaxy.mergerScars) * 0.32 + (1 - galaxy.dustBias) * 0.24
+        + (1 - satelliteSignal) * 0.18 + haloProxy.concentration * 0.26
+      ),
+      UNRESOLVED_ANNULUS: clamp(
+        0.12 + haloOffset * 0.34 + metrics.voidBias * 0.22
+        + metrics.turbulence * 0.18 + diskHaloMisalignment * 0.14
+      )
+    };
+    const subtype = weightedChoice(random, ANNULAR_SUBTYPES.map((value) => ({
+      value,
+      weight: 0.12 + driverSignals[value]
+    })));
+    const formationChannels = {
+      COLLISIONAL_RING: 'IMPACT_DENSITY_WAVE',
+      POLAR_RING: 'ACCRETED_POLAR_ORBIT',
+      RESONANCE_RING: 'ORBITAL_RESONANCE',
+      HOAG_LIKE: 'DETACHED_CORE_AND_RING',
+      UNRESOLVED_ANNULUS: 'NO_DOMINANT_CHANNEL'
+    };
+    let completeness = 0.56 + random() * 0.39;
+    let axisRatio = 0.55 + random() * 0.41;
+    let gapFraction = 0.36 + random() * 0.38;
+    let coreFraction = 0.12 + random() * 0.42;
+    let planeAngle = galaxy.rotation + (random() - 0.5) * 0.62;
+    let secondaryRing = 0;
+    let coreOffsetMagnitude = random() * 0.07;
+
+    if (subtype === 'POLAR_RING') {
+      axisRatio = 0.25 + random() * 0.42;
+      planeAngle = galaxy.rotation + Math.PI * 0.5 + (random() - 0.5) * 0.34;
+      completeness = 0.74 + random() * 0.24;
+    } else if (subtype === 'RESONANCE_RING') {
+      completeness = 0.86 + random() * 0.13;
+      secondaryRing = 0.48 + random() * 0.27;
+      gapFraction = 0.32 + random() * 0.24;
+    } else if (subtype === 'HOAG_LIKE') {
+      completeness = 0.93 + random() * 0.07;
+      axisRatio = 0.82 + random() * 0.17;
+      gapFraction = 0.58 + random() * 0.22;
+      coreFraction = 0.18 + random() * 0.2;
+      coreOffsetMagnitude *= 0.22;
+    } else if (subtype === 'COLLISIONAL_RING') {
+      completeness = 0.58 + random() * 0.34;
+      coreOffsetMagnitude = 0.1 + random() * 0.28;
+    } else {
+      completeness = 0.42 + random() * 0.4;
+      axisRatio = 0.4 + random() * 0.54;
+      coreOffsetMagnitude = 0.08 + random() * 0.34;
+      planeAngle = random() * TAU;
+    }
+
+    const coreOffsetAngle = random() * TAU;
+    return {
+      family: 'ANNULAR',
+      subtype,
+      label: ANNULAR_LABELS[subtype],
+      formationChannel: formationChannels[subtype],
+      annularity: 0.64 + random() * 0.35,
+      ringRadius: 1.18 + random() * 0.68,
+      ringWidth: 0.065 + random() * 0.19,
+      gapFraction,
+      completeness,
+      coreFraction,
+      coreOffsetX: Math.cos(coreOffsetAngle) * coreOffsetMagnitude,
+      coreOffsetY: Math.sin(coreOffsetAngle) * coreOffsetMagnitude,
+      axisRatio,
+      planeAngle: normalizeAngle(planeAngle),
+      secondaryRing,
+      driverStrength: driverSignals[subtype]
+    };
+  }
+
+  function finalizeHaloProxy(galaxy, morphology, haloProxy) {
+    const annular = morphology.family === 'ANNULAR';
+    const ordinaryAlignment = axialAlignment(haloProxy.rotation, morphology.planeAngle);
+    const ringPlaneSupport = annular && morphology.subtype === 'POLAR_RING'
+      ? 1 - ordinaryAlignment
+      : ordinaryAlignment;
+    const offsetLoad = clamp(haloProxy.offsetMagnitude / 0.48);
+    const formationSupport = annular
+      ? clamp(morphology.driverStrength * 0.44 + haloProxy.concentration * 0.31 + ringPlaneSupport * 0.25)
+      : clamp(haloProxy.concentration * 0.44 + (1 - offsetLoad) * 0.34 + haloProxy.luminousAlignment * 0.22);
+    const relaxedness = clamp(
+      haloProxy.concentration * 0.55 + (1 - galaxy.mergerScars) * 0.45
+    );
+    const anomalyScore = clamp(
+      (1 - formationSupport) * 0.48
+      + offsetLoad * relaxedness * 0.32
+      + (annular ? (1 - ringPlaneSupport) * 0.2 : 0)
+    );
+    return {
+      ...haloProxy,
+      ringPlaneSupport,
+      formationSupport,
+      anomalyScore
+    };
+  }
+
   function galaxyFormationTension(genome, galaxy) {
     const { genes, metrics } = genome;
     const massCeiling = 0.6 + metrics.density * 1.7;
     const massLoad = clamp(galaxy.mass / Math.max(0.001, massCeiling));
     const earlyMass = massLoad * clamp((0.54 - galaxy.birth) / 0.42);
     const voidMass = massLoad * metrics.voidBias * (1 - metrics.peakSeeds * 0.35);
-    const orderedTurbulence = galaxy.type === 'SPIRAL'
-      ? clamp((metrics.turbulence - 0.38) / 0.62) * (0.45 + galaxy.arms / 8)
+    const plainSpiral = galaxy.type === 'SPIRAL' && !isAnnularGalaxy(galaxy);
+    const orderedTurbulence = plainSpiral
+      ? clamp((metrics.turbulence - 0.38) / 0.62) * (0.45 + (galaxy.arms || 0) / 8)
       : 0;
-    const expectedArmOrder = clamp((galaxy.arms - 2) / 2);
-    const spinArmMismatch = galaxy.type === 'SPIRAL'
+    const expectedArmOrder = clamp(((galaxy.arms || 0) - 2) / 2);
+    const spinArmMismatch = plainSpiral
       ? Math.abs(expectedArmOrder - metrics.spin) * (0.55 + genes.spiralBias * 0.45)
       : 0;
     const expectedTemperature = 0.28 + (1 - galaxy.birth) * 0.46;
     const thermalOutlier = massLoad * Math.abs(galaxy.temperature - expectedTemperature);
+    const mergerScars = clamp(Number.isFinite(galaxy.mergerScars) ? galaxy.mergerScars : 0);
+    const morphology = galaxy.morphology;
+    const haloProxy = galaxy.haloProxy;
+    const annularity = isAnnularGalaxy(galaxy) ? morphology.annularity : 0;
+    const unsupportedRing = annularity * (1 - (morphology?.driverStrength || 0));
+    const haloPlaneMismatch = annularity * (1 - (haloProxy?.ringPlaneSupport ?? 1));
+    const relaxedHaloOffset = haloProxy
+      ? clamp((haloProxy.offsetMagnitude - 0.08) / 0.4)
+        * (0.35 + (1 - mergerScars) * 0.65)
+        * (0.4 + haloProxy.concentration * 0.6)
+      : 0;
+    const ringDriverLabels = {
+      COLLISIONAL_RING: 'RING WITHOUT A MATCHED COLLISION SIGNAL',
+      POLAR_RING: 'POLAR RING LACKS HALO-PLANE SUPPORT',
+      RESONANCE_RING: 'ORDERED RING LACKS A RESONANCE SIGNAL',
+      HOAG_LIKE: 'CLEAN DETACHED RING HAS NO DOMINANT CHANNEL',
+      UNRESOLVED_ANNULUS: 'NO DOMINANT RING-FORMATION CHANNEL'
+    };
     const weighted = [
       { key: 'EARLY_MASS', label: 'MASS BEFORE SUPPORTED COLLAPSE', value: earlyMass * 0.34 },
       { key: 'VOID_MASS', label: 'LUMINOUS MASS IN A VOID-BIASED FIELD', value: voidMass * 0.31 },
       { key: 'ORDER_TURBULENCE', label: 'ORDERED SPIRAL UNDER HIGH TURBULENCE', value: orderedTurbulence * 0.24 },
       { key: 'SPIN_ARMS', label: 'ARM ORDER EXCEEDS THE SPIN SIGNAL', value: spinArmMismatch * 0.18 },
-      { key: 'THERMAL', label: 'THERMAL STATE IS AN OUTLIER', value: thermalOutlier * 0.12 }
+      { key: 'THERMAL', label: 'THERMAL STATE IS AN OUTLIER', value: thermalOutlier * 0.12 },
+      {
+        key: 'RING_DRIVER',
+        label: ringDriverLabels[morphology?.subtype] || 'NO STRONG RING-FORMING DRIVER IN THIS MODEL',
+        value: unsupportedRing * 0.28
+      },
+      {
+        key: 'HALO_OFFSET',
+        label: 'LIGHT IS OFFSET FROM A RELAXED HALO PROXY',
+        value: relaxedHaloOffset * 0.2
+      },
+      {
+        key: 'RING_HALO_PLANE',
+        label: 'ANNULUS LACKS SUPPORT FROM THE TOY HALO PLANE',
+        value: haloPlaneMismatch * 0.16
+      }
     ].sort((a, b) => b.value - a.value);
     const score = clamp(0.05 + weighted.reduce((sum, factor) => sum + factor.value, 0));
     return {
@@ -431,12 +715,25 @@
         mergerScars: random(),
         satelliteCount: Math.floor(Math.pow(random(), 1.7) * (3 + mass * 6))
       };
+      galaxies.push(galaxy);
+    }
+    const ringCount = annularTargetCount(genome, galaxies.length);
+    const annularIds = new Set(galaxies
+      .map((galaxy) => ({ id: galaxy.id, score: ringCandidateScore(genome, galaxy) }))
+      .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+      .slice(0, ringCount)
+      .map((candidate) => candidate.id));
+    galaxies.forEach((galaxy) => {
+      const initialHalo = deriveHaloProxy(genome, galaxy);
+      galaxy.morphology = annularIds.has(galaxy.id)
+        ? deriveAnnularMorphology(genome, galaxy, initialHalo)
+        : deriveLegacyMorphology(galaxy);
+      galaxy.haloProxy = finalizeHaloProxy(galaxy, galaxy.morphology, initialHalo);
       const tension = galaxyFormationTension(genome, galaxy);
       galaxy.formationTension = tension.score;
       galaxy.tensionDominant = tension.dominant;
       galaxy.tensionFactors = tension.factors;
-      galaxies.push(galaxy);
-    }
+    });
     const ranked = galaxies.slice().sort((a, b) => b.formationTension - a.formationTension);
     ranked.forEach((galaxy, rank) => {
       galaxy.tensionRank = rank;
@@ -514,6 +811,7 @@
     generateAttractor,
     generateGalaxies,
     galaxyFormationTension,
+    isAnnularGalaxy,
     makeUniverse,
     bottleUniverse,
     divergenceScore

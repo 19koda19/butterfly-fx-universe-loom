@@ -47,7 +47,13 @@
             <span>01 / CAUSAL INPUT</span>
             <button class="icon-button" id="help-button" title="How to use Universe Loom" aria-label="How to use Universe Loom">?</button>
           </div>
-          <p class="instruction">Drag through the luminous boundary. The path becomes a deterministic cosmic genome.</p>
+          <p class="instruction" id="source-instruction">Drag through the luminous boundary. The path becomes a deterministic cosmic genome.</p>
+
+          <div class="source-visual-switch" role="group" aria-label="Complex-plane source visualization">
+            <span>SOURCE IMAGE</span>
+            <button class="source-visual-option is-active" data-source-visual="mandelbrot" aria-pressed="true">MANDELBROT</button>
+            <button class="source-visual-option" data-source-visual="buddhabrot" aria-pressed="false">BUDDHABROT</button>
+          </div>
 
           <div class="segmented" role="group" aria-label="Creation behavior">
             <button class="creation-mode is-active" data-creation="branch" aria-pressed="true">
@@ -58,7 +64,7 @@
             </button>
           </div>
 
-          <div class="tool-row" role="toolbar" aria-label="Mandelbrot tools">
+          <div class="tool-row" role="toolbar" aria-label="Complex-plane drawing tools">
             <button class="tool-button is-active" data-tool="draw" title="Draw (D)" aria-pressed="true"><span>⌁</span> DRAW</button>
             <button class="tool-button" data-tool="pan" title="Pan (H)" aria-pressed="false"><span>✣</span> PAN</button>
             <button class="tool-button" data-tool="probe" title="Probe (P)" aria-pressed="false"><span>⊙</span> PROBE</button>
@@ -117,12 +123,12 @@
         </section>
       </aside>
 
-      <section class="instrument-stage" id="instrument-stage" aria-label="Interactive Mandelbrot and universe canvas">
+      <section class="instrument-stage" id="instrument-stage" aria-label="Interactive complex-source and universe canvas">
         <div id="canvas-host" tabindex="0" role="application" aria-describedby="canvas-instructions"></div>
-        <p class="sr-only" id="canvas-instructions">Drag on the Mandelbrot pane to create a universe. Scroll over the Mandelbrot pane to magnify parameter space. Scroll over the universe pane to magnify its structure, and drag there to roam. Press plus or minus to change universe magnification and zero to frame the full universe.</p>
+        <p class="sr-only" id="canvas-instructions">Choose a Mandelbrot escape map or Buddhabrot orbit-density map for the source pane. Drag on the source pane to create a universe. Scroll over it to magnify complex parameter space. Scroll over the universe pane to magnify its structure, and drag there to roam. Press plus or minus to change universe magnification and zero to frame the full universe.</p>
 
         <div class="stage-label source-stage-label">
-          <span>MANDELBROT / SOURCE</span>
+          <span id="source-stage-title">MANDELBROT / SOURCE</span>
           <b id="source-state">C-SPACE · READY</b>
         </div>
         <div class="stage-label universe-stage-label">
@@ -144,9 +150,10 @@
           <div class="cosmos-camera-target">
             <b id="cosmos-target-label">FIELD OVERVIEW</b>
             <span id="cosmos-target-reason">Zoom resolves nested filaments, halos, galaxy arms, and stellar knots.</span>
+            <small id="cosmos-target-evidence" hidden></small>
           </div>
           <p class="cosmos-camera-gesture" aria-hidden="true">WHEEL / DOUBLE-CLICK TO DIVE · DRAG TO ROAM</p>
-          <small id="cosmos-tension-note">MAGENTA = TENSION INSIDE THIS TOY FORMATION MODEL, NOT REAL-WORLD IMPOSSIBILITY</small>
+          <small id="cosmos-tension-note">CYAN = TOY TOTAL-MASS POTENTIAL · MAGENTA = FORMATION TENSION, NOT REAL-WORLD IMPOSSIBILITY</small>
         </div>
 
         <div class="loom-overlay" id="loom-overlay" aria-hidden="true">
@@ -228,19 +235,21 @@
             <div><dt>REGIME</dt><dd id="selected-attractor">—</dd></div>
             <div><dt>FLAGGED GALAXIES</dt><dd id="selected-flags">—</dd></div>
             <div><dt>PEAK TENSION</dt><dd id="selected-tension">—</dd></div>
+            <div><dt>RING SYSTEMS</dt><dd id="selected-rings">—</dd></div>
+            <div><dt>RING CHANNEL</dt><dd id="selected-ring-channel">—</dd></div>
           </dl>
           <div class="selected-actions">
             <button class="accent-button" id="fork-button">BUTTERFLY TWIN <kbd>B</kbd></button>
             <button id="export-genome">BOTTLE JSON</button>
             <button id="export-image">CAPTURE PNG</button>
             <button id="copy-seed">COPY SEED</button>
-            <button class="tension-action" id="inspect-tension">INSPECT ODD GALAXY</button>
+            <button class="tension-action" id="inspect-tension">INSPECT STRANGE RING</button>
           </div>
         </section>
 
         <section class="causal-pipeline">
           <div class="section-heading"><span>CAUSAL PIPELINE</span><span>INSPECT</span></div>
-          <button data-note="mandelbrot"><i>01</i><b>FRACTAL SPECTRUM</b><span>c → escape signal</span></button>
+          <button data-note="mandelbrot"><i>01</i><b>FRACTAL / ORBIT SOURCE</b><span>c → escape signal</span></button>
           <button data-note="attractor"><i>02</i><b>STRANGE ATTRACTOR</b><span>signal → bounded chaos</span></button>
           <button data-note="field"><i>03</i><b>PHASE FIELD</b><span>flow → correlated modes</span></button>
           <button data-note="darkmatter"><i>04</i><b>DARK WEB</b><span>density → filament + halo</span></button>
@@ -273,7 +282,7 @@
           <button class="layer-button is-active" data-layer="bubbles" aria-pressed="true" title="Iso-density contours; dark matter is not literally bubbles">BUBBLE CONTOURS</button>
           <button class="layer-button is-active" data-layer="gas" aria-pressed="true">BARYON GAS</button>
           <button class="layer-button is-active" data-layer="stars" aria-pressed="true">GALAXIES</button>
-          <button class="layer-button is-active" data-layer="halos" aria-pressed="true">HALOS</button>
+          <button class="layer-button is-active" data-layer="halos" aria-pressed="true" title="Toy total-mass potential inferred around each luminous galaxy">MODEL POTENTIAL</button>
           <button class="layer-button is-active" data-layer="tension" aria-pressed="true" title="Highlight galaxies that strain this toy model's own formation mapping">FORMATION TENSION</button>
           <button class="layer-button is-active" data-layer="attractor" aria-pressed="true">ATTRACTOR GHOST</button>
         </div>
@@ -292,7 +301,7 @@
     </div>
     <div class="science-layout">
       <nav aria-label="Science note sections">
-        <button data-scroll-note="mandelbrot" class="is-active"><i>01</i> Mandelbrot boundary</button>
+        <button data-scroll-note="mandelbrot" class="is-active"><i>01</i> Fractal source</button>
         <button data-scroll-note="butterfly"><i>02</i> Butterfly effect</button>
         <button data-scroll-note="attractor"><i>03</i> Strange attractors</button>
         <button data-scroll-note="field"><i>04</i> Phase correlation</button>
@@ -304,7 +313,9 @@
         <section id="note-mandelbrot">
           <span class="note-type measured">MATHEMATICALLY MEASURED</span>
           <h3>01. A line becomes a fractal spectrum</h3>
-          <p>The left pane evaluates <code>zₙ₊₁ = zₙ² + c</code>. Your line is resampled by arc length, so drawing speed does not change its genome. At each complex value <code>c</code>, the engine records smooth escape time, interior occupancy, orbit-trap distance, boundary crossings, and signal roughness.</p>
+          <p>Both source views evaluate <code>zₙ₊₁ = zₙ² + c</code>. Mandelbrot colors each starting value <code>c</code> by its escape behavior. Buddhabrot instead accumulates the paths of many escaping orbits into a progressive traffic-density image. It is another view of the same iteration, not a different fractal.</p>
+          <p>The pixel meanings differ: a Mandelbrot location is the parameter <code>c</code>, while a Buddhabrot location is somewhere an escaping <code>z</code> orbit visited. The drawing overlay deliberately reuses that numbered complex grid as <code>c</code> in both modes, so switching the microscope changes what guides your eye—not the genome rule.</p>
+          <p>Your line is resampled by arc length, so drawing speed does not change its genome. In either visual mode, the engine reads the drawn complex coordinates and records smooth escape time, interior occupancy, orbit-trap distance, boundary crossings, and signal roughness.</p>
           <p>The boundary contains structure at every visible scale. Sampling across it produces abrupt changes from one nearby parameter to the next. That is parameter sensitivity—not, by itself, the atmospheric “butterfly effect.”</p>
         </section>
         <section id="note-butterfly">
@@ -331,21 +342,24 @@ dz/dt = xy − βz</pre>
           <span class="note-type analogy">PHYSICS-INSPIRED ANALOGY</span>
           <h3>05. Invisible scaffolding becomes visible</h3>
           <p>The shader grows a CDM-shaped toy field from broad basins into sheets, filaments, and knots. Cool blue structure represents dark-matter-like density. Violet bubble rims are nested iso-density and potential contours—an interface for seeing a continuous field, not a proposal that dark matter is made of bubbles.</p>
-          <p>Real cold dark matter evolves in three dimensions under gravity and cosmic expansion. This instrument uses a fast 2D procedural displacement that borrows the visual logic of the Zel’dovich approximation.</p>
+          <p>At galaxy scale, thin cyan ellipses are toy total-mass potential contours. They are deliberately drawn behind amber, white, and young blue luminous matter: stars and gas make the visible ring, while a more extended invisible potential influences what orbits can persist. Polar rings are especially interesting because motion in two nearly perpendicular planes can constrain a halo’s three-dimensional shape.</p>
+          <p>Real cold dark matter evolves in three dimensions under gravity and cosmic expansion. This instrument uses a fast 2D procedural displacement and schematic halo proxies that borrow the visual logic of gravitational collapse; they are not mass reconstructions.</p>
         </section>
         <section id="note-galaxies">
           <span class="note-type emergent">EMERGENT OUTPUT</span>
           <h3>06. Nothing places a galaxy by hand</h3>
           <p>Galaxy proxies are sampled from the attractor-warped density knots. Age, density, cooling, turbulence, spin, and feedback determine which halos light up, when they are born, and whether they read as dwarfs, ellipticals, or spirals. The hierarchy is emergent inside this model: field → filament → halo → light.</p>
           <p>The violet → cyan → amber → white scale is an order or “negentropy” proxy: it tracks coherent, collapsed organization relative to the initial procedural field. It is not negative thermodynamic entropy; the simulated system has no complete heat or information accounting.</p>
-          <p><b>Formation Tension</b> ranks galaxy proxies whose mass, birth time, spiral order, turbulence, spin, or thermal state fit this toy field unusually poorly. A high magenta score means “inspect the mapping here,” not “a galaxy like this cannot exist.” It is an internal consistency diagnostic, not an astronomical probability.</p>
+          <p>Annular systems use several visibly different channels. Collisional rings behave like outward density waves after an impact; resonance rings collect around bar-driven orbit families; polar rings rotate in a strongly tilted plane; Hoag-like rings separate an old core from a young outer annulus; unresolved annuli deliberately keep competing histories alive.</p>
+          <p><b>Formation Tension</b> ranks galaxy proxies whose mass, birth time, ring support, halo alignment, spiral order, turbulence, spin, or thermal state fit this toy field unusually poorly. A high magenta score means “the visible evidence does not select a clean history here,” not “a galaxy like this cannot exist.” It is an internal consistency diagnostic, not an astronomical probability.</p>
           <p>Real galaxies additionally require gas hydrodynamics, radiative cooling, star formation, black holes, mergers, chemistry, and feedback across immense ranges of scale. Here they are luminous summaries of collapsed regions.</p>
         </section>
         <section id="note-limits">
           <span class="note-type warning">BOUNDARY OF THE CLAIM</span>
           <h3>07. What the app can honestly teach</h3>
           <p>Simple deterministic rules can create multiscale structure. Nearby initial conditions can diverge. Hidden fields can organize visible matter. Macroscopic form can emerge without a designer placing every part. Those are real shared ideas.</p>
-          <p>The app does not demonstrate that the Mandelbrot set caused cosmology, that dark matter is chaotic, that universes are quantum-entangled, or that this is a precision N-body simulation. It is an instrument for intuition and art.</p>
+          <p>The app does not demonstrate that the Mandelbrot set caused cosmology, that dark matter is chaotic, that universes are quantum-entangled, or that this is a precision N-body simulation. A material ring galaxy is also different from an Einstein ring, which is a lensed image of a more distant source. This is an instrument for intuition and art.</p>
+          <p><b>It is deterministic, but it is not cryptography and it is not reversible.</b> Arc-length resampling, summary statistics, finite escape measurements, a non-cryptographic hash, clamping, and image tone mapping all discard information. A bottled genome can replay its stored strand; a rendered universe cannot uniquely reveal the line that produced it.</p>
         </section>
       </article>
     </div>
@@ -367,10 +381,10 @@ dz/dt = xy − βz</pre>
       <button class="dialog-close icon-button" aria-label="Close help">×</button>
     </div>
     <ol>
-      <li><i>01</i><div><b>ZOOM TOWARD THE LIGHT</b><p>Scroll over the Mandelbrot pane. The bright frontier is where the richest genome signals live.</p></div></li>
+      <li><i>01</i><div><b>CHOOSE A SOURCE MICROSCOPE</b><p>Mandelbrot maps which starts escape; Buddhabrot progressively maps where escaped trajectories travel. They share a numbered complex grid, though their pixels mean different things.</p></div></li>
       <li><i>02</i><div><b>DRAW THROUGH IT</b><p>Drag a line across the boundary. Branch mode ignites on release; Weave mode lets several strands interfere.</p></div></li>
       <li><i>03</i><div><b>LET STRUCTURE EMERGE</b><p>Play model time. Watch density collect into contours, filaments, halo knots, and luminous galaxies.</p></div></li>
-      <li><i>04</i><div><b>DIVE INTO THE CONSEQUENCE</b><p>Scroll or double-click over the universe, then drag to roam. Deeper scales resolve galaxy arms, stellar knots, satellites, and magenta formation-tension flags.</p></div></li>
+      <li><i>04</i><div><b>DIVE INTO THE CONSEQUENCE</b><p>Scroll or double-click over the universe, then drag to roam. Deeper scales resolve galaxy arms, luminous rings, stellar knots, cyan potential contours, and magenta formation-tension flags.</p></div></li>
     </ol>
     <div class="shortcut-grid">
       <span><kbd>D</kbd> draw</span><span><kbd>H</kbd> pan</span><span><kbd>P</kbd> probe</span><span><kbd>B</kbd> butterfly twin</span><span><kbd>N</kbd> new genome</span><span><kbd>SPACE</kbd> play / pause</span><span><kbd>+</kbd> universe dive</span><span><kbd>−</kbd> universe retreat</span><span><kbd>0</kbd> frame universe</span>
@@ -399,12 +413,12 @@ dz/dt = xy − βz</pre>
       <button class="dialog-close icon-button" aria-label="Close screensaver setup">×</button>
     </div>
     <div class="screensaver-copy">
-      <p>The instrument will draw new deterministic genomes, evolve their universes, and continue until you press Escape. Every generated branch remains in the archive. About every five seconds, the camera glides toward a galaxy-scale structure, prioritizing unusual formation-tension targets before reframing.</p>
+      <p>The instrument will draw new deterministic genomes, evolve their universes, and continue until you press Escape. Every generated branch remains in the archive. About every five seconds, it favors an unusual ring or high-tension galaxy before reframing. In BOTH mode the two cameras move together: the left revisits a coordinate that fed the genome while the right dives into one consequence of that recipe. Mandelbrot is the default and its tour favors intricate boundary points; Buddhabrot is used only when you choose it.</p>
       <span class="screen-option-label">FULLSCREEN COMPOSITION</span>
       <div class="screen-view-options" role="group" aria-label="Screensaver composition">
         <button class="screen-view-option is-active" data-screen-view="both" aria-pressed="true"><i>◫</i><b>BOTH</b><span>cause + consequence</span></button>
         <button class="screen-view-option" data-screen-view="universe" aria-pressed="false"><i>✦</i><b>UNIVERSE</b><span>full cosmic field</span></button>
-        <button class="screen-view-option" data-screen-view="mandelbrot" aria-pressed="false"><i>⌁</i><b>MANDELBROT</b><span>fractal + live genome</span></button>
+        <button class="screen-view-option" data-screen-view="mandelbrot" aria-pressed="false"><i>⌁</i><b>SOURCE</b><span>active fractal + genome</span></button>
       </div>
       <label class="range-control screensaver-interval-control">
         <span><b>NEW UNIVERSE INTERVAL</b><output id="screensaver-interval-value">24 seconds</output></span>
@@ -421,6 +435,7 @@ dz/dt = xy − βz</pre>
   <script src="./vendor/p5.min.js"></script>
   <script src="./simulation.js"></script>
   <script src="./shaders.js"></script>
+  <script src="./buddhabrot.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

@@ -4,6 +4,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Cosmo = require('../src/simulation.js');
 
+const ANNULAR_SUBTYPES = new Set([
+  'COLLISIONAL_RING',
+  'POLAR_RING',
+  'RESONANCE_RING',
+  'HOAG_LIKE',
+  'UNRESOLVED_ANNULUS'
+]);
+
+function assertUnitInterval(value, label) {
+  assert.ok(Number.isFinite(value), `${label} should be finite`);
+  assert.ok(value >= 0 && value <= 1, `${label} should be between zero and one`);
+}
+
 function makeStrand(offset = 0) {
   return {
     role: 'AUTO',
@@ -80,6 +93,46 @@ test('identical paths compile to identical genomes and galaxies', () => {
   assert.deepEqual(first.attractor, second.attractor);
 });
 
+test('tagged structure streams preserve the legacy base-galaxy PRNG sequence', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-A', { createdAt: 'fixed' });
+  const legacyFields = (id) => {
+    const galaxy = universe.galaxies.find((candidate) => candidate.id === id);
+    return {
+      x: galaxy.x,
+      y: galaxy.y,
+      mass: galaxy.mass,
+      birth: galaxy.birth,
+      type: galaxy.type,
+      arms: galaxy.arms,
+      rotation: galaxy.rotation,
+      mergerScars: galaxy.mergerScars,
+      satelliteCount: galaxy.satelliteCount
+    };
+  };
+  assert.deepEqual(legacyFields('G-001'), {
+    x: 0.8812556156229623,
+    y: 0.19852606684679516,
+    mass: 0.599052538424718,
+    birth: 0.12715301411526167,
+    type: 'DWARF',
+    arms: 0,
+    rotation: 0.5905090492778644,
+    mergerScars: 0.12741318927146494,
+    satelliteCount: 3
+  });
+  assert.deepEqual(legacyFields('G-002'), {
+    x: 0.418401990184238,
+    y: 0.5466973728159011,
+    mass: 0.720682361666765,
+    birth: 0.3659160889715132,
+    type: 'ELLIPTICAL',
+    arms: 0,
+    rotation: 6.1681411266019746,
+    mergerScars: 0.14644554699771106,
+    satelliteCount: 4
+  });
+});
+
 test('galaxies carry deterministic multiscale structure and model-tension diagnostics', () => {
   const universe = Cosmo.makeUniverse([makeStrand()], 'U-A', { createdAt: 'fixed' });
   assert.ok(universe.galaxies.length > 0);
@@ -89,7 +142,99 @@ test('galaxies carry deterministic multiscale structure and model-tension diagno
     assert.ok(galaxy.tensionFactors.length === 2);
     assert.equal(typeof galaxy.tensionDominant, 'string');
     assert.ok(galaxy.satelliteCount >= 0);
+    assert.ok(galaxy.morphology);
+    assert.ok(galaxy.haloProxy);
+    [
+      'annularity',
+      'gapFraction',
+      'completeness',
+      'coreFraction',
+      'axisRatio',
+      'secondaryRing',
+      'driverStrength'
+    ].forEach((field) => assertUnitInterval(galaxy.morphology[field], `morphology.${field}`));
+    ['ringRadius', 'ringWidth', 'coreOffsetX', 'coreOffsetY', 'planeAngle'].forEach((field) => {
+      assert.ok(Number.isFinite(galaxy.morphology[field]), `morphology.${field} should be finite`);
+    });
+    assert.ok(galaxy.morphology.planeAngle >= 0 && galaxy.morphology.planeAngle < Cosmo.TAU);
+    assert.equal(galaxy.haloProxy.model, 'TOY_HALO_PROXY');
+    assert.ok(Number.isFinite(galaxy.haloProxy.radiusScale));
+    assert.ok(galaxy.haloProxy.radiusScale > 0);
+    ['concentration', 'axisRatio', 'luminousAlignment', 'ringPlaneSupport', 'formationSupport', 'anomalyScore']
+      .forEach((field) => assertUnitInterval(galaxy.haloProxy[field], `haloProxy.${field}`));
+    ['rotation', 'offsetX', 'offsetY', 'offsetMagnitude'].forEach((field) => {
+      assert.ok(Number.isFinite(galaxy.haloProxy[field]), `haloProxy.${field} should be finite`);
+    });
+    assert.ok(Math.abs(Math.hypot(galaxy.haloProxy.offsetX, galaxy.haloProxy.offsetY)
+      - galaxy.haloProxy.offsetMagnitude) < 1e-12);
   });
+});
+
+test('canonical universes deterministically devote ten to eighteen percent of galaxies to annular systems', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-RINGS', { createdAt: 'fixed' });
+  const rings = universe.galaxies.filter(Cosmo.isAnnularGalaxy);
+  const fraction = rings.length / universe.galaxies.length;
+  assert.ok(rings.length > 0);
+  assert.ok(fraction >= 0.1 && fraction <= 0.18, `annular fraction was ${fraction}`);
+  rings.forEach((galaxy) => {
+    assert.ok(ANNULAR_SUBTYPES.has(galaxy.morphology.subtype));
+    assert.equal(galaxy.morphology.family, 'ANNULAR');
+    assert.ok(galaxy.morphology.ringRadius > 1);
+    assert.ok(galaxy.morphology.ringWidth > 0);
+    assert.ok(galaxy.morphology.annularity > 0.6);
+  });
+  universe.galaxies.filter((galaxy) => !Cosmo.isAnnularGalaxy(galaxy)).forEach((galaxy) => {
+    assert.equal(galaxy.morphology.family, galaxy.type);
+    assert.equal(galaxy.morphology.subtype, galaxy.type);
+    assert.equal(galaxy.morphology.annularity, 0);
+  });
+});
+
+test('annular subtype vocabulary appears across deterministic fractal seeds', () => {
+  const observed = new Set();
+  for (let index = 0; index < 4; index += 1) {
+    const universe = Cosmo.makeUniverse([makeStrand(index * 0.00037)], `U-RING-${index}`, {
+      createdAt: 'fixed',
+      galaxyLimit: 120
+    });
+    universe.galaxies.filter(Cosmo.isAnnularGalaxy)
+      .forEach((galaxy) => observed.add(galaxy.morphology.subtype));
+  }
+  assert.deepEqual(observed, ANNULAR_SUBTYPES);
+});
+
+test('unsupported annuli accumulate more model tension than otherwise identical supported annuli', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-RINGS', { createdAt: 'fixed' });
+  const ring = universe.galaxies.find(Cosmo.isAnnularGalaxy);
+  assert.ok(ring);
+  const supported = JSON.parse(JSON.stringify(ring));
+  supported.morphology.driverStrength = 1;
+  supported.haloProxy.offsetMagnitude = 0;
+  supported.haloProxy.ringPlaneSupport = 1;
+  supported.haloProxy.concentration = 1;
+  supported.mergerScars = 0;
+  const unsupported = JSON.parse(JSON.stringify(supported));
+  unsupported.morphology.driverStrength = 0;
+  unsupported.haloProxy.offsetMagnitude = 0.48;
+  unsupported.haloProxy.ringPlaneSupport = 0;
+  const supportedTension = Cosmo.galaxyFormationTension(universe.genome, supported);
+  const unsupportedTension = Cosmo.galaxyFormationTension(universe.genome, unsupported);
+  assert.ok(unsupportedTension.score > supportedTension.score);
+  assert.ok(unsupportedTension.factors.some((factor) => factor.key.startsWith('RING') || factor.key === 'HALO_OFFSET'));
+});
+
+test('formation tension remains tolerant of legacy galaxies without morphology or halo metadata', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-LEGACY', { createdAt: 'fixed' });
+  const result = Cosmo.galaxyFormationTension(universe.genome, {
+    mass: 0.5,
+    birth: 0.42,
+    temperature: 0.55,
+    type: 'SPIRAL',
+    arms: 2
+  });
+  assertUnitInterval(result.score, 'legacy tension score');
+  assert.equal(typeof result.dominant, 'string');
+  assert.equal(result.factors.length, 2);
 });
 
 test('epsilon perturbation creates a deterministic but distinct twin', () => {
