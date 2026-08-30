@@ -49,6 +49,50 @@
     };
   }
 
+  function cosmicFitSpan(aspect = 1) {
+    return Math.max(1, 1 / Math.max(0.000001, aspect));
+  }
+
+  function screenToCosmicField(nx, ny, view, aspect = 1) {
+    const span = cosmicFitSpan(aspect) * view.scale;
+    return {
+      x: view.x + (nx - 0.5) * span * aspect,
+      y: view.y + (ny - 0.5) * span
+    };
+  }
+
+  function cosmicFieldToScreen(x, y, view, aspect = 1) {
+    const span = cosmicFitSpan(aspect) * view.scale;
+    return {
+      x: ((x - view.x) / (span * aspect)) + 0.5,
+      y: ((y - view.y) / span) + 0.5
+    };
+  }
+
+  function clampCosmicView(view, aspect = 1, minScale = 1 / 128, maxScale = 1) {
+    const scale = clamp(Number.isFinite(view.scale) ? view.scale : 1, minScale, maxScale);
+    const span = cosmicFitSpan(aspect) * scale;
+    const halfX = span * aspect * 0.5;
+    const halfY = span * 0.5;
+    return {
+      x: halfX >= 0.5 ? 0.5 : clamp(Number.isFinite(view.x) ? view.x : 0.5, halfX, 1 - halfX),
+      y: halfY >= 0.5 ? 0.5 : clamp(Number.isFinite(view.y) ? view.y : 0.5, halfY, 1 - halfY),
+      scale
+    };
+  }
+
+  function zoomCosmicView(view, nx, ny, scaleFactor, aspect = 1, minScale = 1 / 128, maxScale = 1) {
+    const current = clampCosmicView(view, aspect, minScale, maxScale);
+    const anchor = screenToCosmicField(nx, ny, current, aspect);
+    const scale = clamp(current.scale * scaleFactor, minScale, maxScale);
+    const span = cosmicFitSpan(aspect) * scale;
+    return clampCosmicView({
+      x: anchor.x - (nx - 0.5) * span * aspect,
+      y: anchor.y - (ny - 0.5) * span,
+      scale
+    }, aspect, minScale, maxScale);
+  }
+
   function mandelbrotSample(cx, cy, maxIterations = 180) {
     let zx = 0;
     let zy = 0;
@@ -321,6 +365,40 @@
     return normalizeAttractor(points);
   }
 
+  function galaxyFormationTension(genome, galaxy) {
+    const { genes, metrics } = genome;
+    const massCeiling = 0.6 + metrics.density * 1.7;
+    const massLoad = clamp(galaxy.mass / Math.max(0.001, massCeiling));
+    const earlyMass = massLoad * clamp((0.54 - galaxy.birth) / 0.42);
+    const voidMass = massLoad * metrics.voidBias * (1 - metrics.peakSeeds * 0.35);
+    const orderedTurbulence = galaxy.type === 'SPIRAL'
+      ? clamp((metrics.turbulence - 0.38) / 0.62) * (0.45 + galaxy.arms / 8)
+      : 0;
+    const expectedArmOrder = clamp((galaxy.arms - 2) / 2);
+    const spinArmMismatch = galaxy.type === 'SPIRAL'
+      ? Math.abs(expectedArmOrder - metrics.spin) * (0.55 + genes.spiralBias * 0.45)
+      : 0;
+    const expectedTemperature = 0.28 + (1 - galaxy.birth) * 0.46;
+    const thermalOutlier = massLoad * Math.abs(galaxy.temperature - expectedTemperature);
+    const weighted = [
+      { key: 'EARLY_MASS', label: 'MASS BEFORE SUPPORTED COLLAPSE', value: earlyMass * 0.34 },
+      { key: 'VOID_MASS', label: 'LUMINOUS MASS IN A VOID-BIASED FIELD', value: voidMass * 0.31 },
+      { key: 'ORDER_TURBULENCE', label: 'ORDERED SPIRAL UNDER HIGH TURBULENCE', value: orderedTurbulence * 0.24 },
+      { key: 'SPIN_ARMS', label: 'ARM ORDER EXCEEDS THE SPIN SIGNAL', value: spinArmMismatch * 0.18 },
+      { key: 'THERMAL', label: 'THERMAL STATE IS AN OUTLIER', value: thermalOutlier * 0.12 }
+    ].sort((a, b) => b.value - a.value);
+    const score = clamp(0.05 + weighted.reduce((sum, factor) => sum + factor.value, 0));
+    return {
+      score,
+      dominant: weighted[0].label,
+      factors: weighted.slice(0, 2).map((factor) => ({
+        key: factor.key,
+        label: factor.label,
+        strength: clamp(factor.value * 3.2)
+      }))
+    };
+  }
+
   function generateGalaxies(genome, attractor, limit) {
     const { genes, metrics, seed } = genome;
     const random = mulberry32(seed ^ 0x7f4a7c15);
@@ -334,7 +412,8 @@
       const y = clamp(lerp(random(), attractorPoint.y, fieldMix) + (random() - 0.5) * scatter, 0.02, 0.98);
       const mass = Math.pow(random(), 2.4) * (0.6 + metrics.density * 1.7);
       const spiral = random() < genes.spiralBias;
-      galaxies.push({
+      const galaxy = {
+        id: `G-${String(i + 1).padStart(3, '0')}`,
         x,
         y,
         mass,
@@ -343,9 +422,25 @@
         birth: clamp(0.22 + random() * 0.55 - metrics.density * 0.12),
         temperature: random(),
         type: spiral ? 'SPIRAL' : (mass > 0.72 ? 'ELLIPTICAL' : 'DWARF'),
-        arms: spiral ? 2 + Math.floor(random() * 3) : 0
-      });
+        arms: spiral ? 2 + Math.floor(random() * 3) : 0,
+        coreSize: 0.12 + random() * 0.3,
+        armPitch: 0.62 + random() * 1.15,
+        ellipticity: 0.48 + random() * 0.46,
+        clumpiness: random(),
+        dustBias: random(),
+        mergerScars: random(),
+        satelliteCount: Math.floor(Math.pow(random(), 1.7) * (3 + mass * 6))
+      };
+      const tension = galaxyFormationTension(genome, galaxy);
+      galaxy.formationTension = tension.score;
+      galaxy.tensionDominant = tension.dominant;
+      galaxy.tensionFactors = tension.factors;
+      galaxies.push(galaxy);
     }
+    const ranked = galaxies.slice().sort((a, b) => b.formationTension - a.formationTension);
+    ranked.forEach((galaxy, rank) => {
+      galaxy.tensionRank = rank;
+    });
     return galaxies.sort((a, b) => a.birth - b.birth);
   }
 
@@ -408,11 +503,17 @@
     mulberry32,
     screenToComplex,
     complexToScreen,
+    screenToCosmicField,
+    cosmicFieldToScreen,
+    cosmicFitSpan,
+    clampCosmicView,
+    zoomCosmicView,
     mandelbrotSample,
     resampleStroke,
     analyzeStrands,
     generateAttractor,
     generateGalaxies,
+    galaxyFormationTension,
     makeUniverse,
     bottleUniverse,
     divergenceScore

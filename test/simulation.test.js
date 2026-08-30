@@ -30,6 +30,37 @@ test('screen and complex transforms round-trip at arbitrary zoom', () => {
   assert.ok(Math.abs(screen.y - 0.81) < 1e-12);
 });
 
+test('cosmic field transforms round-trip and cursor zoom stays anchored', () => {
+  const view = { x: 0.62, y: 0.41, scale: 0.25 };
+  [0.55, 1, 2.2].forEach((aspect) => {
+    const world = Cosmo.screenToCosmicField(0.21, 0.77, view, aspect);
+    const screen = Cosmo.cosmicFieldToScreen(world.x, world.y, view, aspect);
+    assert.ok(Math.abs(screen.x - 0.21) < 1e-12);
+    assert.ok(Math.abs(screen.y - 0.77) < 1e-12);
+
+    const zoomed = Cosmo.zoomCosmicView(view, 0.21, 0.77, 0.5, aspect);
+    const anchored = Cosmo.screenToCosmicField(0.21, 0.77, zoomed, aspect);
+    assert.ok(Math.abs(anchored.x - world.x) < 1e-12);
+    assert.ok(Math.abs(anchored.y - world.y) < 1e-12);
+    assert.equal(zoomed.scale, 0.125);
+  });
+});
+
+test('cosmic camera remains inside the generated field at extreme zoom', () => {
+  [0.55, 1, 2.2].forEach((aspect) => {
+    const low = Cosmo.clampCosmicView({ x: -10, y: -12, scale: 1e-9 }, aspect);
+    const high = Cosmo.clampCosmicView({ x: 10, y: 12, scale: 1e-9 }, aspect);
+    const span = Cosmo.cosmicFitSpan(aspect) / 128;
+    const halfX = span * aspect * 0.5;
+    const halfY = span * 0.5;
+    assert.equal(low.scale, 1 / 128);
+    assert.ok(Math.abs(low.x - halfX) < 1e-12);
+    assert.ok(Math.abs(low.y - halfY) < 1e-12);
+    assert.ok(Math.abs(high.x - (1 - halfX)) < 1e-12);
+    assert.ok(Math.abs(high.y - (1 - halfY)) < 1e-12);
+  });
+});
+
 test('stroke resampling preserves endpoints and requested count', () => {
   const points = makeStrand().points.slice(0, 8);
   const resampled = Cosmo.resampleStroke(points, 64);
@@ -47,6 +78,18 @@ test('identical paths compile to identical genomes and galaxies', () => {
   assert.deepEqual(first.genome.genes, second.genome.genes);
   assert.deepEqual(first.galaxies, second.galaxies);
   assert.deepEqual(first.attractor, second.attractor);
+});
+
+test('galaxies carry deterministic multiscale structure and model-tension diagnostics', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-A', { createdAt: 'fixed' });
+  assert.ok(universe.galaxies.length > 0);
+  universe.galaxies.forEach((galaxy) => {
+    assert.match(galaxy.id, /^G-\d{3}$/);
+    assert.ok(galaxy.formationTension >= 0 && galaxy.formationTension <= 1);
+    assert.ok(galaxy.tensionFactors.length === 2);
+    assert.equal(typeof galaxy.tensionDominant, 'string');
+    assert.ok(galaxy.satelliteCount >= 0);
+  });
 });
 
 test('epsilon perturbation creates a deterministic but distinct twin', () => {

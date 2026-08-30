@@ -115,6 +115,10 @@
     uniform float uTime;
     uniform float uAge;
     uniform float uAspect;
+    uniform vec2 uViewCenter;
+    uniform float uViewScale;
+    uniform float uViewZoom;
+    uniform float uPixelWorld;
     uniform vec4 uSeed;
     uniform vec4 uSharedSeed;
     uniform float uCorrelation;
@@ -156,7 +160,9 @@
       float amplitude = 0.52;
       mat2 rotateScale = mat2(1.53, 1.17, -1.17, 1.53);
       for (int i = 0; i < 6; i++) {
-        sum += amplitude * valueNoise(p);
+        vec2 footprint = fwidth(p);
+        float octaveGate = 1.0 - smoothstep(0.32, 0.82, max(footprint.x, footprint.y));
+        sum += amplitude * mix(0.5, valueNoise(p), octaveGate);
         p = rotateScale * p + 17.13;
         amplitude *= 0.5;
       }
@@ -195,11 +201,26 @@
       return mat2(c, -s, s, c);
     }
 
+    float frequencyGate(float frequency) {
+      return 1.0 - smoothstep(0.32, 0.82, frequency * uPixelWorld);
+    }
+
+    float pointKernel(vec2 local, float innerRadius, float outerRadius, float frequency) {
+      float antialias = clamp(frequency * uPixelWorld * 0.5, 0.006, 0.3);
+      return 1.0 - smoothstep(
+        max(0.0, innerRadius - antialias),
+        min(0.5, outerRadius + antialias),
+        length(local - 0.5)
+      );
+    }
+
     void main() {
-      vec2 uv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);
-      vec2 p = (uv - 0.5) * vec2(uAspect, 1.0);
+      vec2 screenUv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);
+      vec2 p = (uViewCenter - 0.5) + (screenUv - 0.5) * vec2(uViewScale * uAspect, uViewScale);
+      vec2 uv = p + 0.5;
       float growth = smoothstep(0.02, 0.88, uAge);
       float dawn = smoothstep(0.18, 0.72, uAge);
+      float detailOctave = clamp(log(max(uViewZoom, 1.0)) / log(2.0), 0.0, 7.0);
 
       float angularFlow = uSpin * (0.18 + length(p) * 0.48) * growth;
       p = rotate2d(angularFlow) * p;
@@ -218,11 +239,27 @@
       float cellular = 1.0 - smoothstep(0.025, 0.24, voronoiEdge(p * (5.0 + uDensity * 3.0), uSeed));
       float filaments = clamp(ridge * 0.72 + cellular * 0.62, 0.0, 1.0) * growth;
 
+      float subReveal = smoothstep(1.7, 7.0, uViewZoom);
+      float microA = seedField(p * (15.0 + uTurbulence * 7.0), uSeed.yxwz);
+      float microB = seedField(p * (31.0 + uDensity * 13.0) + 81.7, uSeed.wxyz);
+      float microRidge = 1.0 - abs(2.0 * (microA * 0.68 + microB * 0.32) - 1.0);
+      microRidge = pow(clamp(microRidge, 0.0, 1.0), 4.2);
+      float microCell = 1.0 - smoothstep(0.018, 0.18, voronoiEdge(p * (16.0 + uDensity * 8.0), uSeed.zwxy));
+      float subFilaments = clamp(microRidge * 0.74 + microCell * 0.48, 0.0, 1.0)
+        * subReveal * growth * frequencyGate((31.0 + uDensity * 13.0) * 26.0);
+
+      float nanoReveal = smoothstep(11.0, 42.0, uViewZoom);
+      float nanoA = seedField(p * (72.0 + uTurbulence * 29.0), uSeed.wzyx);
+      float nanoB = seedField(p * (154.0 + uDensity * 51.0) + 137.0, uSeed.zxyw);
+      float nanoRidge = pow(clamp(1.0 - abs(nanoA - nanoB), 0.0, 1.0), 7.2)
+        * nanoReveal * growth * frequencyGate((154.0 + uDensity * 51.0) * 26.0);
+      filaments = clamp(filaments + subFilaments * 0.56 + nanoRidge * 0.32, 0.0, 1.0);
+
       float bubbleShells = 0.0;
       float potential = 0.0;
       for (int i = 0; i < 7; i++) {
         float fi = float(i);
-        vec2 center = (hash22(vec2(fi * 7.17, fi * 19.3) + uSeed.xy * 53.0) - 0.5) * vec2(uAspect, 1.0);
+        vec2 center = hash22(vec2(fi * 7.17, fi * 19.3) + uSeed.xy * 53.0) - 0.5;
         float radius = 0.07 + hash21(center + fi) * 0.22 + uAge * (0.015 + 0.04 * hash21(center));
         float d = length(p - center);
         bubbleShells += exp(-abs(d - radius) * (42.0 - uVoidBias * 13.0));
@@ -241,22 +278,48 @@
       color += vec3(0.04, 0.56, 0.62) * gas * 0.6;
       color += vec3(0.85, 0.33, 0.58) * gas * gas * 0.28;
       color += mix(vec3(0.35, 0.72, 0.95), vec3(0.98, 0.58, 0.18), clamp(halo * 1.3, 0.0, 1.0)) * halo * 0.72;
+      color += vec3(0.07, 0.42, 0.58) * subFilaments * (0.08 + detailOctave * 0.032);
+      color += vec3(0.88, 0.54, 0.22) * nanoRidge * 0.19;
       color *= 0.44 + voidMask * 0.78;
 
       float dustGrid = 420.0;
       vec2 dustCell = floor(uv * dustGrid);
       float dust = hash21(dustCell + uSeed.xy * 103.0);
-      float dustShape = 1.0 - smoothstep(0.0, 0.08, length(fract(uv * dustGrid) - 0.5));
+      float dustShape = pointKernel(fract(uv * dustGrid), 0.0, 0.08, dustGrid);
       float starThreshold = 0.996 - uDensity * 0.0015;
-      float stars = step(starThreshold, dust) * dustShape * dawn * smoothstep(0.34, 0.78, filaments + halo);
+      float stars = step(starThreshold, dust) * dustShape * dawn * frequencyGate(dustGrid)
+        * smoothstep(0.34, 0.78, filaments + halo);
       color += vec3(1.0, 0.86, 0.64) * stars * (0.8 + 1.5 * hash21(dustCell + 9.1));
+
+      float clusterReveal = smoothstep(5.0, 11.0, uViewZoom);
+      float clusterGrid = 2400.0;
+      vec2 clusterCell = floor(uv * clusterGrid);
+      float clusterHash = hash21(clusterCell + uSeed.zw * 619.0);
+      float clusterShape = pointKernel(fract(uv * clusterGrid), 0.035, 0.21, clusterGrid);
+      float clusterStars = step(0.993, clusterHash) * clusterShape * clusterReveal * dawn * frequencyGate(clusterGrid)
+        * smoothstep(0.22, 0.7, subFilaments + filaments * 0.48);
+      color += mix(vec3(0.42, 0.76, 1.0), vec3(1.0, 0.66, 0.34), hash21(clusterCell + 17.0))
+        * clusterStars * (1.2 + 2.1 * hash21(clusterCell + 53.0));
+
+      float stellarReveal = smoothstep(19.0, 45.0, uViewZoom);
+      float stellarGrid = 12000.0;
+      vec2 stellarCell = floor(uv * stellarGrid);
+      float stellarHash = hash21(stellarCell + uSeed.xy * 1301.0);
+      float stellarShape = pointKernel(fract(uv * stellarGrid), 0.025, 0.17, stellarGrid);
+      float resolvedStars = step(0.9945, stellarHash) * stellarShape * stellarReveal * dawn * frequencyGate(stellarGrid)
+        * smoothstep(0.28, 0.78, nanoRidge + subFilaments * 0.6);
+      color += mix(vec3(0.56, 0.78, 1.0), vec3(1.0, 0.78, 0.5), hash21(stellarCell + 31.0))
+        * resolvedStars * (1.6 + 2.8 * hash21(stellarCell + 101.0));
 
       float attractorGhost = abs(sin((p.x * 11.0 + p.y * 15.0 + largeScale * 6.0) - uTime * 0.12));
       attractorGhost = pow(1.0 - attractorGhost, 18.0) * uAttractorLayer * 0.08;
       color += vec3(0.76, 0.3, 0.78) * attractorGhost;
 
-      float vignette = 1.0 - smoothstep(0.34, 0.8, length(uv - 0.5));
+      float vignette = 1.0 - smoothstep(0.34, 0.8, length(screenUv - 0.5));
       color *= 0.62 + vignette * 0.38;
+      float microscopeExposure = mix(1.0, 0.22, smoothstep(1.2, 6.0, uViewZoom));
+      color *= microscopeExposure;
+      color = color / (1.0 + color * 0.65);
       color = pow(max(color, 0.0), vec3(0.86));
       OUTPUT_COLOR = vec4(color, 1.0);
     }

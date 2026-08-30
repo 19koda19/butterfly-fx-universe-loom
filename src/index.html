@@ -31,7 +31,7 @@
         <button class="compact-action autogen-action" id="screensaver-button" title="Fullscreen procedural screensaver">AUTOGEN ⛶</button>
         <span class="model-badge" title="This is a physics-inspired generative analogy">MODEL, NOT THEORY</span>
         <button class="text-action" id="science-button">SCIENCE NOTES</button>
-        <button class="text-action" id="license-button">OPEN SOURCE</button>
+        <button class="text-action" id="license-button" aria-label="Open-source licenses and credits" title="Open-source licenses and credits">OPEN SOURCE</button>
         <button class="gpu-badge is-checking" id="gpu-button" aria-haspopup="dialog">
           <span class="gpu-light"></span>
           <span id="gpu-label">GPU · CHECKING</span>
@@ -119,7 +119,7 @@
 
       <section class="instrument-stage" id="instrument-stage" aria-label="Interactive Mandelbrot and universe canvas">
         <div id="canvas-host" tabindex="0" role="application" aria-describedby="canvas-instructions"></div>
-        <p class="sr-only" id="canvas-instructions">Use Draw mode and drag on the left Mandelbrot pane to create a universe. Use the mouse wheel to zoom. Use Pan mode to move the fractal view.</p>
+        <p class="sr-only" id="canvas-instructions">Drag on the Mandelbrot pane to create a universe. Scroll over the Mandelbrot pane to magnify parameter space. Scroll over the universe pane to magnify its structure, and drag there to roam. Press plus or minus to change universe magnification and zero to frame the full universe.</p>
 
         <div class="stage-label source-stage-label">
           <span>MANDELBROT / SOURCE</span>
@@ -128,6 +128,25 @@
         <div class="stage-label universe-stage-label">
           <span>UNIVERSE / CONSEQUENCE</span>
           <b id="universe-state">NO COSMOS YET</b>
+        </div>
+
+        <div class="cosmos-camera" id="cosmos-camera" role="group" aria-labelledby="cosmos-camera-label" hidden>
+          <div class="cosmos-camera-heading">
+            <span id="cosmos-camera-label">UNIVERSE CAMERA</span>
+            <output id="cosmos-zoom-level" for="cosmos-zoom-control">1.00× · FIELD</output>
+          </div>
+          <div class="cosmos-camera-controls">
+            <button type="button" id="cosmos-zoom-out" aria-label="Zoom universe out" title="Zoom universe out (minus)">−</button>
+            <input id="cosmos-zoom-control" type="range" min="0" max="7" step="0.01" value="0" aria-label="Universe magnification" aria-valuetext="1 times magnification">
+            <button type="button" id="cosmos-zoom-in" aria-label="Zoom universe in" title="Zoom universe in (plus)">+</button>
+            <button type="button" id="cosmos-camera-reset" aria-label="Frame the full universe" title="Frame the full universe (zero)">FRAME</button>
+          </div>
+          <div class="cosmos-camera-target">
+            <b id="cosmos-target-label">FIELD OVERVIEW</b>
+            <span id="cosmos-target-reason">Zoom resolves nested filaments, halos, galaxy arms, and stellar knots.</span>
+          </div>
+          <p class="cosmos-camera-gesture" aria-hidden="true">WHEEL / DOUBLE-CLICK TO DIVE · DRAG TO ROAM</p>
+          <small id="cosmos-tension-note">MAGENTA = TENSION INSIDE THIS TOY FORMATION MODEL, NOT REAL-WORLD IMPOSSIBILITY</small>
         </div>
 
         <div class="loom-overlay" id="loom-overlay" aria-hidden="true">
@@ -207,12 +226,15 @@
             <div><dt>STRANDS</dt><dd id="selected-strands">—</dd></div>
             <div><dt>DARK : BARYON</dt><dd id="selected-ratio">—</dd></div>
             <div><dt>REGIME</dt><dd id="selected-attractor">—</dd></div>
+            <div><dt>FLAGGED GALAXIES</dt><dd id="selected-flags">—</dd></div>
+            <div><dt>PEAK TENSION</dt><dd id="selected-tension">—</dd></div>
           </dl>
           <div class="selected-actions">
             <button class="accent-button" id="fork-button">BUTTERFLY TWIN <kbd>B</kbd></button>
             <button id="export-genome">BOTTLE JSON</button>
             <button id="export-image">CAPTURE PNG</button>
             <button id="copy-seed">COPY SEED</button>
+            <button class="tension-action" id="inspect-tension">INSPECT ODD GALAXY</button>
           </div>
         </section>
 
@@ -228,7 +250,7 @@
     </main>
 
     <footer class="epoch-deck">
-      <button class="play-button" id="play-button" aria-label="Play cosmic evolution"><span></span></button>
+      <button class="play-button" id="play-button" aria-label="Play cosmic evolution" aria-pressed="false"><span></span></button>
       <div class="epoch-track">
         <div class="epoch-heading">
           <span>MODEL TIME / EMERGENCE</span>
@@ -252,15 +274,16 @@
           <button class="layer-button is-active" data-layer="gas" aria-pressed="true">BARYON GAS</button>
           <button class="layer-button is-active" data-layer="stars" aria-pressed="true">GALAXIES</button>
           <button class="layer-button is-active" data-layer="halos" aria-pressed="true">HALOS</button>
+          <button class="layer-button is-active" data-layer="tension" aria-pressed="true" title="Highlight galaxies that strain this toy model's own formation mapping">FORMATION TENSION</button>
           <button class="layer-button is-active" data-layer="attractor" aria-pressed="true">ATTRACTOR GHOST</button>
         </div>
       </div>
     </footer>
   </div>
 
-  <dialog id="science-dialog" class="modal-dialog science-dialog">
+  <dialog id="science-dialog" class="modal-dialog science-dialog" aria-labelledby="science-dialog-title">
     <div class="dialog-topline">
-      <div><span>INSTRUMENT MANUAL / REALITY CHECK</span><h2>THE LONG CAUSAL BRIDGE</h2></div>
+      <div><span>INSTRUMENT MANUAL / REALITY CHECK</span><h2 id="science-dialog-title">THE LONG CAUSAL BRIDGE</h2></div>
       <button class="dialog-close icon-button" aria-label="Close science notes">×</button>
     </div>
     <div class="science-warning">
@@ -315,6 +338,7 @@ dz/dt = xy − βz</pre>
           <h3>06. Nothing places a galaxy by hand</h3>
           <p>Galaxy proxies are sampled from the attractor-warped density knots. Age, density, cooling, turbulence, spin, and feedback determine which halos light up, when they are born, and whether they read as dwarfs, ellipticals, or spirals. The hierarchy is emergent inside this model: field → filament → halo → light.</p>
           <p>The violet → cyan → amber → white scale is an order or “negentropy” proxy: it tracks coherent, collapsed organization relative to the initial procedural field. It is not negative thermodynamic entropy; the simulated system has no complete heat or information accounting.</p>
+          <p><b>Formation Tension</b> ranks galaxy proxies whose mass, birth time, spiral order, turbulence, spin, or thermal state fit this toy field unusually poorly. A high magenta score means “inspect the mapping here,” not “a galaxy like this cannot exist.” It is an internal consistency diagnostic, not an astronomical probability.</p>
           <p>Real galaxies additionally require gas hydrodynamics, radiative cooling, star formation, black holes, mergers, chemistry, and feedback across immense ranges of scale. Here they are luminous summaries of collapsed regions.</p>
         </section>
         <section id="note-limits">
@@ -327,7 +351,7 @@ dz/dt = xy − βz</pre>
     </div>
   </dialog>
 
-  <dialog id="gpu-dialog" class="modal-dialog gpu-dialog">
+  <dialog id="gpu-dialog" class="modal-dialog gpu-dialog" aria-labelledby="gpu-dialog-title">
     <div class="dialog-topline">
       <div><span>RENDER DIAGNOSTICS</span><h2 id="gpu-dialog-title">GRAPHICS PIPELINE</h2></div>
       <button class="dialog-close icon-button" aria-label="Close diagnostics">×</button>
@@ -337,24 +361,25 @@ dz/dt = xy − βz</pre>
     <div class="dialog-actions"><button id="copy-diagnostics">COPY DIAGNOSTICS</button><button class="dialog-close accent-button">DONE</button></div>
   </dialog>
 
-  <dialog id="help-dialog" class="modal-dialog help-dialog">
+  <dialog id="help-dialog" class="modal-dialog help-dialog" aria-labelledby="help-dialog-title">
     <div class="dialog-topline">
-      <div><span>THREE MOVES</span><h2>HOW TO GROW A UNIVERSE</h2></div>
+      <div><span>FOUR MOVES</span><h2 id="help-dialog-title">HOW TO GROW A UNIVERSE</h2></div>
       <button class="dialog-close icon-button" aria-label="Close help">×</button>
     </div>
     <ol>
       <li><i>01</i><div><b>ZOOM TOWARD THE LIGHT</b><p>Scroll over the Mandelbrot pane. The bright frontier is where the richest genome signals live.</p></div></li>
       <li><i>02</i><div><b>DRAW THROUGH IT</b><p>Drag a line across the boundary. Branch mode ignites on release; Weave mode lets several strands interfere.</p></div></li>
       <li><i>03</i><div><b>LET STRUCTURE EMERGE</b><p>Play model time. Watch density collect into contours, filaments, halo knots, and luminous galaxies.</p></div></li>
+      <li><i>04</i><div><b>DIVE INTO THE CONSEQUENCE</b><p>Scroll or double-click over the universe, then drag to roam. Deeper scales resolve galaxy arms, stellar knots, satellites, and magenta formation-tension flags.</p></div></li>
     </ol>
     <div class="shortcut-grid">
-      <span><kbd>D</kbd> draw</span><span><kbd>H</kbd> pan</span><span><kbd>P</kbd> probe</span><span><kbd>B</kbd> butterfly twin</span><span><kbd>N</kbd> new genome</span><span><kbd>SPACE</kbd> play / pause</span>
+      <span><kbd>D</kbd> draw</span><span><kbd>H</kbd> pan</span><span><kbd>P</kbd> probe</span><span><kbd>B</kbd> butterfly twin</span><span><kbd>N</kbd> new genome</span><span><kbd>SPACE</kbd> play / pause</span><span><kbd>+</kbd> universe dive</span><span><kbd>−</kbd> universe retreat</span><span><kbd>0</kbd> frame universe</span>
     </div>
   </dialog>
 
-  <dialog id="license-dialog" class="modal-dialog license-dialog">
+  <dialog id="license-dialog" class="modal-dialog license-dialog" aria-labelledby="license-dialog-title">
     <div class="dialog-topline">
-      <div><span>OPEN-SOURCE CREDITS</span><h2>BUILT IN THE OPEN</h2></div>
+      <div><span>OPEN-SOURCE CREDITS</span><h2 id="license-dialog-title">BUILT IN THE OPEN</h2></div>
       <button class="dialog-close icon-button" aria-label="Close open-source credits">×</button>
     </div>
     <div class="license-copy">
@@ -368,13 +393,13 @@ dz/dt = xy − βz</pre>
     </div>
   </dialog>
 
-  <dialog id="screensaver-dialog" class="modal-dialog screensaver-dialog">
+  <dialog id="screensaver-dialog" class="modal-dialog screensaver-dialog" aria-labelledby="screensaver-dialog-title">
     <div class="dialog-topline">
-      <div><span>AUTOGEN / DISPLAY MODE</span><h2>LET THE LOOM DREAM</h2></div>
+      <div><span>AUTOGEN / DISPLAY MODE</span><h2 id="screensaver-dialog-title">LET THE LOOM DREAM</h2></div>
       <button class="dialog-close icon-button" aria-label="Close screensaver setup">×</button>
     </div>
     <div class="screensaver-copy">
-      <p>The instrument will draw new deterministic genomes, evolve their universes, and continue until you press Escape. Every generated branch remains in the archive.</p>
+      <p>The instrument will draw new deterministic genomes, evolve their universes, and continue until you press Escape. Every generated branch remains in the archive. About every five seconds, the camera glides toward a galaxy-scale structure, prioritizing unusual formation-tension targets before reframing.</p>
       <span class="screen-option-label">FULLSCREEN COMPOSITION</span>
       <div class="screen-view-options" role="group" aria-label="Screensaver composition">
         <button class="screen-view-option is-active" data-screen-view="both" aria-pressed="true"><i>◫</i><b>BOTH</b><span>cause + consequence</span></button>

@@ -53,8 +53,8 @@ async function createWindow() {
     gpuCrash = { reason: details.reason, exitCode: details.exitCode, at: Date.now() };
   });
 
+  mainWindow.once('ready-to-show', () => mainWindow?.show());
   await mainWindow.loadFile(path.join(__dirname, '..', 'src', 'index.html'));
-  mainWindow.once('ready-to-show', () => mainWindow.show());
 
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });

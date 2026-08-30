@@ -15,6 +15,21 @@
     VOID: [155, 130, 255]
   };
 
+  const COSMOS_MIN_SCALE = 1 / 128;
+
+  function makeCosmosCamera() {
+    return {
+      x: 0.5,
+      y: 0.5,
+      scale: 1,
+      targetX: 0.5,
+      targetY: 0.5,
+      targetScale: 1,
+      inspectId: null,
+      motion: 'manual'
+    };
+  }
+
   const state = {
     p: null,
     shaders: null,
@@ -40,14 +55,20 @@
     universeSerial: 1,
     drawing: false,
     panning: false,
+    cosmosPanning: false,
     panOrigin: null,
     viewOrigin: null,
-    spaceHeld: false,
+    cosmosPanOrigin: null,
+    cosmosViewOrigin: null,
+    cosmosPanRect: null,
     previewGenome: null,
     previewAt: 0,
     age: 0,
     playing: false,
-    layers: { dark: true, bubbles: true, gas: true, stars: true, halos: true, attractor: true },
+    layers: { dark: true, bubbles: true, gas: true, stars: true, halos: true, tension: true, attractor: true },
+    cosmosViews: new Map(),
+    cosmosCamera: makeCosmosCamera(),
+    cameraUIAt: 0,
     layout: null,
     fps: 0,
     fpsAccumulator: 0,
@@ -65,6 +86,11 @@
       view: 'both',
       interval: 24,
       nextAt: 0,
+      nextCameraAt: 0,
+      cameraStep: 0,
+      tourTargetId: null,
+      fractalHome: null,
+      fractalTarget: null,
       previousFocus: 'both'
     }
   };
@@ -144,6 +170,11 @@
       button.setAttribute('aria-pressed', String(active));
     });
     $('.phase-link-control').classList.toggle('is-hidden', mode !== 'divergence' || !state.comparison);
+    if (state.p) {
+      state.layout = calculateLayout(state.p.width, state.p.height);
+      reclampCosmosCamera();
+      syncLayoutDOM();
+    }
   }
 
   function setFocusView(view) {
@@ -155,6 +186,7 @@
     if (state.p) {
       state.p.resizeCanvas(Math.max(10, host.clientWidth), Math.max(10, host.clientHeight));
       state.layout = calculateLayout(state.p.width, state.p.height);
+      reclampCosmosCamera();
       syncLayoutDOM();
     }
   }
@@ -200,10 +232,184 @@
     $('.source-stage-label').hidden = state.layout.source.w < 2;
     $('.universe-stage-label').hidden = cosmos.w < 2;
     $('.universe-stage-label').style.left = `${cosmos.x + 14}px`;
+    const camera = $('#cosmos-camera');
+    camera.style.setProperty('--cosmos-width', `${Math.max(0, cosmos.w)}px`);
+    camera.hidden = cosmos.w < 150 || !state.selected;
+    camera.classList.toggle('is-compact', cosmos.w < 320);
+    updateCosmosCameraUI();
   }
 
   function pointerIn(rect, x, y) {
     return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+  }
+
+  function cosmosRects() {
+    const cosmos = state.layout?.cosmos;
+    if (!cosmos || cosmos.w < 2 || cosmos.h < 2) return [];
+    if (state.viewMode === 'divergence' && state.comparison) {
+      const gap = 2;
+      const half = (cosmos.w - gap) / 2;
+      return [
+        { ...cosmos, w: half },
+        { x: cosmos.x + half + gap, y: cosmos.y, w: half, h: cosmos.h }
+      ];
+    }
+    return [cosmos];
+  }
+
+  function cosmosRectAt(x, y) {
+    return cosmosRects().find((rect) => pointerIn(rect, x, y)) || null;
+  }
+
+  function activeCosmosRect() {
+    return cosmosRects()[0] || { x: 0, y: 0, w: 1, h: 1 };
+  }
+
+  function reclampCosmosCamera() {
+    const rect = cosmosRects()[0];
+    if (!rect) return;
+    const aspect = rect.w / Math.max(1, rect.h);
+    const camera = state.cosmosCamera;
+    const current = MathX.clampCosmicView(cameraView(camera), aspect, COSMOS_MIN_SCALE, 1);
+    const target = MathX.clampCosmicView(cameraView(camera, true), aspect, COSMOS_MIN_SCALE, 1);
+    Object.assign(camera, {
+      x: current.x,
+      y: current.y,
+      scale: current.scale,
+      targetX: target.x,
+      targetY: target.y,
+      targetScale: target.scale
+    });
+  }
+
+  function cameraView(camera = state.cosmosCamera, target = false) {
+    return target
+      ? { x: camera.targetX, y: camera.targetY, scale: camera.targetScale }
+      : { x: camera.x, y: camera.y, scale: camera.scale };
+  }
+
+  function activateCosmosCamera(universe) {
+    const key = universe?.id || 'AMBIENT';
+    if (!state.cosmosViews.has(key)) state.cosmosViews.set(key, makeCosmosCamera());
+    state.cosmosCamera = state.cosmosViews.get(key);
+    reclampCosmosCamera();
+    updateCosmosCameraUI();
+  }
+
+  function setCosmosCameraTarget(view, options = {}) {
+    const rect = options.rect || activeCosmosRect();
+    const aspect = rect.w / Math.max(1, rect.h);
+    const next = MathX.clampCosmicView(view, aspect, COSMOS_MIN_SCALE, 1);
+    const camera = state.cosmosCamera;
+    camera.targetX = next.x;
+    camera.targetY = next.y;
+    camera.targetScale = next.scale;
+    camera.inspectId = options.inspectId ?? null;
+    camera.motion = options.motion || 'manual';
+    if (options.immediate || state.reducedMotion) {
+      camera.x = next.x;
+      camera.y = next.y;
+      camera.scale = next.scale;
+    }
+    updateCosmosCameraUI();
+  }
+
+  function resetCosmosCamera(options = {}) {
+    setCosmosCameraTarget({ x: 0.5, y: 0.5, scale: 1 }, {
+      immediate: Boolean(options.immediate),
+      motion: options.motion || 'manual'
+    });
+    if (!options.quiet) {
+      announce('The full generated universe is framed.');
+      showToast('Universe camera restored to the full field.');
+    }
+  }
+
+  function zoomCosmosAt(x, y, scaleFactor, options = {}) {
+    const rect = options.rect || cosmosRectAt(x, y) || activeCosmosRect();
+    if (rect.w < 2 || rect.h < 2 || !state.selected) return false;
+    const nx = MathX.clamp((x - rect.x) / rect.w);
+    const ny = MathX.clamp((y - rect.y) / rect.h);
+    const aspect = rect.w / Math.max(1, rect.h);
+    const currentTarget = cameraView(state.cosmosCamera, true);
+    const next = MathX.zoomCosmicView(currentTarget, nx, ny, scaleFactor, aspect, COSMOS_MIN_SCALE, 1);
+    setCosmosCameraTarget(next, { rect, motion: options.motion || 'manual' });
+    return true;
+  }
+
+  function updateCosmosCamera(deltaTime) {
+    const camera = state.cosmosCamera;
+    const difference = Math.abs(camera.x - camera.targetX)
+      + Math.abs(camera.y - camera.targetY)
+      + Math.abs(Math.log(camera.scale / camera.targetScale));
+    if (difference < 1e-7) return;
+    if (state.reducedMotion) {
+      camera.x = camera.targetX;
+      camera.y = camera.targetY;
+      camera.scale = camera.targetScale;
+      return;
+    }
+    const rate = camera.motion === 'tour' ? 0.0026 : 0.011;
+    const ease = 1 - Math.exp(-Math.min(50, deltaTime) * rate);
+    camera.x = MathX.lerp(camera.x, camera.targetX, ease);
+    camera.y = MathX.lerp(camera.y, camera.targetY, ease);
+    camera.scale = Math.exp(MathX.lerp(Math.log(camera.scale), Math.log(camera.targetScale), ease));
+    if (difference < 0.00002) {
+      camera.x = camera.targetX;
+      camera.y = camera.targetY;
+      camera.scale = camera.targetScale;
+    }
+  }
+
+  function cosmosDetailLabel(zoom) {
+    if (zoom < 2.2) return 'FIELD';
+    if (zoom < 6) return 'COSMIC WEB';
+    if (zoom < 16) return 'FILAMENTS';
+    if (zoom < 40) return 'GALAXY';
+    if (zoom < 90) return 'STELLAR CLOUDS';
+    return 'RESOLVED KNOTS';
+  }
+
+  function galaxyNearCamera(universe = state.selected) {
+    if (!universe || state.cosmosCamera.scale > 0.42) return null;
+    const view = cameraView();
+    let nearest = null;
+    let nearestDistance = Infinity;
+    universe.galaxies.forEach((galaxy) => {
+      if (galaxy.birth > state.age) return;
+      const distance = Math.hypot(galaxy.x - view.x, galaxy.y - view.y);
+      const weighted = distance / (0.7 + galaxy.mass * 0.3);
+      if (weighted < nearestDistance) {
+        nearest = galaxy;
+        nearestDistance = weighted;
+      }
+    });
+    return nearestDistance <= Math.max(0.035, view.scale * 0.48) ? nearest : null;
+  }
+
+  function updateCosmosCameraUI() {
+    const cameraElement = $('#cosmos-camera');
+    if (!cameraElement) return;
+    const camera = state.cosmosCamera;
+    const zoom = 1 / Math.max(COSMOS_MIN_SCALE, camera.scale);
+    const formatted = zoom < 10 ? zoom.toFixed(2) : zoom.toFixed(1);
+    $('#cosmos-zoom-level').textContent = `${formatted}× · ${cosmosDetailLabel(zoom)}`;
+    const control = $('#cosmos-zoom-control');
+    control.value = String(Math.log2(1 / Math.max(COSMOS_MIN_SCALE, camera.targetScale)));
+    control.setAttribute('aria-valuetext', `${formatted} times magnification, ${cosmosDetailLabel(zoom).toLowerCase()} detail`);
+
+    const inspected = state.selected?.galaxies.find((galaxy) => galaxy.id === camera.inspectId)
+      || galaxyNearCamera();
+    cameraElement.classList.toggle('is-targeting', Boolean(inspected));
+    if (inspected) {
+      const tension = Math.round(inspected.formationTension * 100);
+      $('#cosmos-target-label').textContent = `${inspected.id} · ${inspected.type} · ${inspected.type === 'SPIRAL' ? `${inspected.arms} ARMS · ` : ''}TENSION ${tension}%`;
+      $('#cosmos-target-reason').textContent = `MODEL FLAG · ${inspected.tensionDominant}`;
+    } else {
+      const flagged = state.selected?.galaxies.filter((galaxy) => galaxy.formationTension >= 0.42).length || 0;
+      $('#cosmos-target-label').textContent = `FIELD OVERVIEW · ${flagged} TENSION FLAG${flagged === 1 ? '' : 'S'}`;
+      $('#cosmos-target-reason').textContent = 'Zoom resolves nested filaments, halos, galaxy arms, satellites, and stellar knots.';
+    }
   }
 
   function eventToComplex(x, y) {
@@ -314,6 +520,7 @@
 
   function selectUniverse(universe, options = {}) {
     state.selected = universe;
+    activateCosmosCamera(universe);
     state.previewGenome = universe.genome;
     if (!options.preserveComparison) state.comparison = null;
     updateGenomeUI(universe.genome);
@@ -398,6 +605,8 @@
       y: preset.y + (random() - 0.5) * preset.scale * 0.08,
       scale: preset.scale * (0.82 + random() * 0.38)
     };
+    state.screensaver.fractalHome = { ...state.view };
+    state.screensaver.fractalTarget = { ...state.view };
     state.fallbackKey = '';
 
     const imaginedAspect = state.layout?.source.w > 2
@@ -425,10 +634,101 @@
       name: `Auto Cosmos ${String(state.universeSerial).padStart(3, '0')}`,
       age: 0.02
     });
-    if (state.universes.length > 24) state.universes.shift();
-    state.screensaver.nextAt = performance.now() + state.screensaver.interval * 1000;
+    if (state.universes.length > 24) {
+      const removed = state.universes.shift();
+      state.cosmosViews.delete(removed.id);
+    }
+    const now = performance.now();
+    state.screensaver.nextAt = now + state.screensaver.interval * 1000;
+    state.screensaver.nextCameraAt = now + 4800;
+    state.screensaver.cameraStep = 0;
+    state.screensaver.tourTargetId = null;
     renderArchive();
     return universe;
+  }
+
+  function pickTourGalaxy(universe, step, excludedId = null) {
+    const mature = universe.galaxies.filter((galaxy) => galaxy.birth <= Math.max(0.62, state.age) && galaxy.id !== excludedId);
+    const pool = (mature.length ? mature : universe.galaxies)
+      .slice()
+      .sort((a, b) => {
+        const scoreA = a.formationTension * 0.74 + MathX.clamp(a.mass / 2.2) * 0.26;
+        const scoreB = b.formationTension * 0.74 + MathX.clamp(b.mass / 2.2) * 0.26;
+        return scoreB - scoreA;
+      })
+      .slice(0, 8);
+    if (!pool.length) return null;
+    const random = MathX.mulberry32((universe.genome.seed ^ Math.imul(step + 1, 0x9e3779b9)) >>> 0);
+    return pool[Math.floor(random() * pool.length)];
+  }
+
+  function contributingSourcePoint(universe, galaxy) {
+    const points = universe.strands.flatMap((strand) => strand.points || []);
+    if (!points.length || !galaxy) return null;
+    const galaxyNumber = Number.parseInt(galaxy.id.replace(/\D/g, ''), 10) || 1;
+    const index = (Math.imul(galaxyNumber, 37) + (universe.genome.seed >>> 7)) % points.length;
+    return points[index];
+  }
+
+  function setFractalTourTarget(universe, galaxy, zoom) {
+    const home = state.screensaver.fractalHome;
+    const point = contributingSourcePoint(universe, galaxy);
+    if (!home || !point) return;
+    state.screensaver.fractalTarget = {
+      x: point.cx,
+      y: point.cy,
+      scale: Math.max(0.000015, home.scale / zoom)
+    };
+  }
+
+  function updateFractalTourCamera(deltaTime) {
+    const target = state.screensaver.fractalTarget;
+    if (!state.screensaver.active || !target) return;
+    if (state.reducedMotion) {
+      state.view = { ...target };
+      state.fallbackKey = '';
+      return;
+    }
+    const ease = 1 - Math.exp(-Math.min(50, deltaTime) * 0.00225);
+    state.view.x = MathX.lerp(state.view.x, target.x, ease);
+    state.view.y = MathX.lerp(state.view.y, target.y, ease);
+    state.view.scale = Math.exp(MathX.lerp(Math.log(state.view.scale), Math.log(target.scale), ease));
+    state.fallbackKey = '';
+  }
+
+  function tourCosmosCamera(now = performance.now()) {
+    const universe = state.selected;
+    if (!universe) {
+      state.screensaver.nextCameraAt = now + 5000;
+      return;
+    }
+    state.screensaver.cameraStep += 1;
+    const phase = (state.screensaver.cameraStep - 1) % 4;
+    if (phase === 3) {
+      resetCosmosCamera({ quiet: true, motion: 'tour' });
+      if (state.screensaver.fractalHome) state.screensaver.fractalTarget = { ...state.screensaver.fractalHome };
+      state.screensaver.tourTargetId = null;
+      state.screensaver.nextCameraAt = now + 5000;
+      return;
+    }
+
+    let galaxy = universe.galaxies.find((item) => item.id === state.screensaver.tourTargetId);
+    if (!galaxy || phase === 0 || phase === 2) {
+      galaxy = pickTourGalaxy(universe, state.screensaver.cameraStep, phase === 2 ? state.screensaver.tourTargetId : null);
+      state.screensaver.tourTargetId = galaxy?.id || null;
+    }
+    if (!galaxy) {
+      resetCosmosCamera({ quiet: true, motion: 'tour' });
+    } else {
+      const zoom = phase === 0 ? 7 : (phase === 1 ? 34 : 16);
+      setCosmosCameraTarget({ x: galaxy.x, y: galaxy.y, scale: 1 / zoom }, {
+        inspectId: galaxy.id,
+        motion: 'tour'
+      });
+      const sourceZoom = phase === 0 ? 2.4 : (phase === 1 ? 8 : 4.2);
+      setFractalTourTarget(universe, galaxy, sourceZoom);
+    }
+    state.screensaver.nextCameraAt = now + 5000;
   }
 
   async function setFullscreen(enabled) {
@@ -452,6 +752,7 @@
       if (!state.p) return;
       state.p.resizeCanvas(Math.max(10, host.clientWidth), Math.max(10, host.clientHeight));
       state.layout = calculateLayout(state.p.width, state.p.height);
+      reclampCosmosCamera();
       syncLayoutDOM();
     });
   }
@@ -462,6 +763,9 @@
     state.screensaver.view = $('.screen-view-option.is-active')?.dataset.screenView || 'both';
     state.screensaver.interval = Number($('#screensaver-interval').value);
     state.screensaver.nextAt = performance.now() + 250;
+    state.screensaver.nextCameraAt = performance.now() + 4800;
+    state.screensaver.cameraStep = 0;
+    state.screensaver.tourTargetId = null;
     setFocusView(state.screensaver.view);
     document.body.classList.add('screensaver-mode');
     $('#screensaver-hud').hidden = false;
@@ -492,6 +796,7 @@
       return null;
     }
     const base = state.selected;
+    const sharedCamera = state.cosmosViews.get(base.id) || state.cosmosCamera;
     const epsilon = 1e-8;
     const twin = createUniverse(base.strands, {
       name: `${base.name} A′`,
@@ -502,6 +807,8 @@
     });
     state.comparison = { base, twin, epsilon };
     state.selected = twin;
+    state.cosmosViews.set(twin.id, sharedCamera);
+    state.cosmosCamera = sharedCamera;
     state.viewMode = 'divergence';
     setViewMode('divergence', { skipFork: true });
     updateSelectedUI();
@@ -517,6 +824,26 @@
     const structure = metrics.density * 0.38 + metrics.peakSeeds * 0.28
       + (1 - metrics.voidBias) * 0.16 + (1 - metrics.entropy) * 0.18;
     return MathX.clamp(structure * Math.pow(state.age, 0.78) * state.emergenceGain);
+  }
+
+  function inspectHighestTension() {
+    const universe = state.selected;
+    if (!universe?.galaxies.length) return;
+    const galaxy = universe.galaxies.reduce((peak, candidate) => (
+      !peak || candidate.formationTension > peak.formationTension ? candidate : peak
+    ), null);
+    if (!galaxy) return;
+    if (state.focusView === 'mandelbrot') setFocusView('universe');
+    if (state.age < galaxy.birth + 0.06) {
+      state.age = Math.min(1, galaxy.birth + 0.06);
+      updateAgeUI();
+    }
+    setCosmosCameraTarget({ x: galaxy.x, y: galaxy.y, scale: 1 / 28 }, {
+      inspectId: galaxy.id,
+      motion: 'manual'
+    });
+    announce(`${galaxy.id}, ${galaxy.type.toLowerCase()}, has ${Math.round(galaxy.formationTension * 100)} percent formation tension inside this model.`);
+    showToast(`${galaxy.id} · ${galaxy.tensionDominant}. Model inconsistency flag—not a claim of physical impossibility.`, 5200);
   }
 
   function updateSelectedUI() {
@@ -535,6 +862,14 @@
     $('#selected-strands').textContent = String(universe.strands.length).padStart(2, '0');
     $('#selected-ratio').textContent = `${universe.genome.genes.darkMatterRatio.toFixed(1)} : 1`;
     $('#selected-attractor').textContent = universe.genome.genes.attractor;
+    const peakTension = universe.galaxies.reduce((peak, galaxy) => (
+      !peak || galaxy.formationTension > peak.formationTension ? galaxy : peak
+    ), null);
+    const flagged = universe.galaxies.filter((galaxy) => galaxy.formationTension >= 0.42).length;
+    $('#selected-flags').textContent = `${flagged} / ${universe.galaxies.length}`;
+    $('#selected-tension').textContent = peakTension
+      ? `${Math.round(peakTension.formationTension * 100)}% · ${peakTension.id}`
+      : '—';
     $('#hud-seed').textContent = universe.genome.seedHex;
     $('#hud-attractor').textContent = universe.genome.genes.attractor;
     $('#hud-halos').textContent = String(universe.genome.genes.haloCount);
@@ -603,7 +938,15 @@
     return 'PRESENT MODEL';
   }
 
+  function updatePlayButton() {
+    const button = $('#play-button');
+    button.classList.toggle('is-playing', state.playing);
+    button.setAttribute('aria-pressed', String(state.playing));
+    button.setAttribute('aria-label', state.playing ? 'Pause cosmic evolution' : 'Play cosmic evolution');
+  }
+
   function updateAgeUI() {
+    updatePlayButton();
     const input = $('#age-control');
     input.value = String(state.age);
     setRangeProgress(input);
@@ -663,56 +1006,169 @@
   function renderCosmos(p, universe, rect, sharedUniverse = null, correlation = 0) {
     if (rect.w < 2 || rect.h < 2) return;
     const uniforms = cosmosUniforms(universe, sharedUniverse, correlation);
-    uniforms.uAspect = rect.w / Math.max(1, rect.h);
+    const aspect = rect.w / Math.max(1, rect.h);
+    const span = MathX.cosmicFitSpan(aspect) * state.cosmosCamera.scale;
+    uniforms.uAspect = aspect;
+    uniforms.uViewCenter = [state.cosmosCamera.x, state.cosmosCamera.y];
+    uniforms.uViewScale = span;
+    uniforms.uViewZoom = 1 / Math.max(COSMOS_MIN_SCALE, state.cosmosCamera.scale);
+    uniforms.uPixelWorld = span / Math.max(1, rect.h);
     drawShaderRect(p, state.shaders?.cosmos, rect, uniforms);
-    if (state.layers.stars && state.selected) drawGalaxies(p, universe, rect);
+    if ((state.layers.stars || state.layers.tension) && state.selected) drawGalaxies(p, universe, rect);
+  }
+
+  function drawGalaxyMorphology(p, universe, galaxy, galaxyIndex, radius, birthFade) {
+    const warm = galaxy.temperature;
+    const red = 170 + warm * 85;
+    const green = 205 - warm * 22;
+    const blue = 255 - warm * 85;
+    p.noFill();
+
+    if (radius < 2.4) {
+      p.stroke(red, green, blue, 115 + birthFade * 130);
+      p.strokeWeight(Math.max(0.65, radius * 0.85));
+      p.point(0, 0);
+      return;
+    }
+
+    p.rotate(galaxy.rotation);
+    p.stroke(red, green, blue, 75 + birthFade * 135);
+    p.strokeWeight(Math.max(0.7, Math.min(2.4, radius * 0.08)));
+    p.ellipse(0, 0, radius * 2.1, radius * 2.1 * galaxy.ellipticity);
+    p.stroke(255, 218, 166, 130 + birthFade * 90);
+    p.strokeWeight(Math.max(1, Math.min(7, radius * galaxy.coreSize)));
+    p.point(0, 0);
+
+    if (galaxy.type === 'SPIRAL' && radius > 4) {
+      const steps = Math.min(58, Math.max(15, Math.floor(radius * 0.85)));
+      p.stroke(244, 185, 95, 42 + birthFade * 62);
+      p.strokeWeight(Math.max(0.55, Math.min(1.8, radius * 0.018)));
+      for (let arm = 0; arm < galaxy.arms; arm += 1) {
+        for (let lane = -1; lane <= 1; lane += 1) {
+          p.stroke(
+            lane === 0 ? 244 : 111,
+            lane === 0 ? 185 : 191,
+            lane === 0 ? 95 : 232,
+            lane === 0 ? 42 + birthFade * 62 : 18 + birthFade * 26
+          );
+          p.beginShape();
+          for (let step = 0; step < steps; step += 1) {
+            const t = step / Math.max(1, steps - 1);
+            const angle = t * Math.PI * 2 * galaxy.armPitch + arm * MathX.TAU / galaxy.arms + lane * 0.045;
+            const armRadius = Math.pow(t, 0.82) * radius * (1.9 + lane * 0.035);
+            p.vertex(Math.cos(angle) * armRadius, Math.sin(angle) * armRadius * galaxy.ellipticity);
+          }
+          p.endShape();
+        }
+      }
+    } else if (galaxy.type === 'ELLIPTICAL' && radius > 5) {
+      for (let shell = 1; shell <= 4; shell += 1) {
+        p.stroke(205, 220, 255, 42 - shell * 5);
+        p.strokeWeight(0.55);
+        p.ellipse(0, 0, radius * shell * 0.92, radius * shell * 0.92 * galaxy.ellipticity);
+      }
+    }
+
+    if (radius > 8) {
+      const random = MathX.mulberry32((universe.genome.seed ^ Math.imul(galaxyIndex + 1, 0x85ebca6b)) >>> 0);
+      const clusterCount = Math.min(180, Math.max(18, Math.floor(radius * (0.9 + galaxy.clumpiness))));
+      for (let cluster = 0; cluster < clusterCount; cluster += 1) {
+        const arm = Math.floor(random() * Math.max(1, galaxy.arms));
+        const t = Math.sqrt(random());
+        const angle = galaxy.type === 'SPIRAL'
+          ? t * Math.PI * 2 * galaxy.armPitch + arm * MathX.TAU / Math.max(1, galaxy.arms) + (random() - 0.5) * 0.23
+          : random() * MathX.TAU;
+        const spread = galaxy.type === 'SPIRAL' ? t * radius * 1.9 : Math.sqrt(random()) * radius * 1.45;
+        const x = Math.cos(angle) * spread + (random() - 0.5) * radius * 0.09;
+        const y = Math.sin(angle) * spread * galaxy.ellipticity + (random() - 0.5) * radius * 0.09;
+        const hot = random();
+        p.stroke(170 + hot * 85, 190 + hot * 55, 255 - hot * 75, 80 + random() * 155);
+        p.strokeWeight(0.55 + random() * Math.min(2.1, radius * 0.025));
+        p.point(x, y);
+      }
+
+      if (radius > 16) {
+        for (let satellite = 0; satellite < galaxy.satelliteCount; satellite += 1) {
+          const angle = random() * MathX.TAU;
+          const orbit = radius * (2.3 + random() * 3.2);
+          p.stroke(150, 194, 244, 75 + random() * 95);
+          p.strokeWeight(0.65 + random());
+          p.point(Math.cos(angle) * orbit, Math.sin(angle) * orbit * 0.72);
+        }
+      }
+    }
+  }
+
+  function drawFormationTension(p, marker, rect, zoom) {
+    const { galaxy, x, y, radius } = marker;
+    const targeted = galaxy.id === state.cosmosCamera.inspectId;
+    const flagged = galaxy.tensionRank < 6 || galaxy.formationTension >= 0.48;
+    if (!targeted && !flagged && zoom < 7) return;
+    const alpha = 42 + galaxy.formationTension * 150 + (targeted ? 55 : 0);
+    const ring = Math.min(88, Math.max(6, radius * 2.1) + (targeted ? 5 : 0));
+    p.noFill();
+    p.stroke(235, 99, 180, Math.min(245, alpha));
+    p.strokeWeight(targeted ? 1.25 : 0.7);
+    p.circle(x, y, ring * 2);
+    const tick = Math.min(8, ring * 0.32);
+    p.line(x - ring, y, x - ring + tick, y);
+    p.line(x + ring - tick, y, x + ring, y);
+    p.line(x, y - ring, x, y - ring + tick);
+    p.line(x, y + ring - tick, x, y + ring);
+
+    if (targeted && zoom >= 5 && rect.w > 250) {
+      const rightEdge = rect.x + rect.w - p.width / 2 - 126;
+      const labelX = Math.min(x + ring + 7, rightEdge);
+      const labelY = Math.max(rect.y - p.height / 2 + 52, y - 5);
+      p.noStroke();
+      p.fill(244, 168, 210, 230);
+      p.textFont('monospace');
+      p.textSize(7);
+      p.text(`${galaxy.id} · FORMATION TENSION ${Math.round(galaxy.formationTension * 100)}%`, labelX, labelY);
+      p.fill(142, 113, 150, 210);
+      p.textSize(6);
+      p.text(galaxy.tensionDominant, labelX, labelY + 11);
+    }
   }
 
   function drawGalaxies(p, universe, rect) {
     if (rect.w < 2 || rect.h < 2) return;
-    const available = universe.galaxies.filter((galaxy) => state.age >= galaxy.birth);
-    if (!available.length) return;
-    const budgetStride = state.fps && state.fps < 30 ? 2 : 1;
+    const aspect = rect.w / Math.max(1, rect.h);
+    const view = cameraView();
+    const span = MathX.cosmicFitSpan(aspect) * view.scale;
+    const zoom = 1 / Math.max(COSMOS_MIN_SCALE, view.scale);
+    const budgetStride = state.fps && state.fps < 30 && zoom < 5 ? 2 : 1;
+    const markers = [];
     p.push();
     p.blendMode(p.ADD);
     p.noFill();
-    for (let index = 0; index < available.length; index += budgetStride) {
-      const galaxy = available[index];
-      const x = rect.x + galaxy.x * rect.w - p.width / 2;
-      const y = rect.y + galaxy.y * rect.h - p.height / 2;
+    for (let index = 0; index < universe.galaxies.length; index += budgetStride) {
+      const galaxy = universe.galaxies[index];
+      if (state.age < galaxy.birth) continue;
+      const screen = MathX.cosmicFieldToScreen(galaxy.x, galaxy.y, view, aspect);
       const birthFade = MathX.clamp((state.age - galaxy.birth) * 12);
-      const scale = Math.max(0.65, Math.sqrt(rect.w * rect.h) / 510);
-      const size = galaxy.size * scale * birthFade;
-      if (state.layers.halos && galaxy.mass > 0.24) {
-        p.stroke(82, 137, 239, 18 + galaxy.mass * 24);
-        p.strokeWeight(0.7);
-        p.circle(x, y, size * (3.2 + galaxy.mass));
-      }
-      const warm = galaxy.temperature;
-      p.stroke(170 + warm * 85, 205 - warm * 22, 255 - warm * 85, 115 + birthFade * 130);
-      p.strokeWeight(Math.max(0.65, size * 0.42));
-      p.point(x, y);
+      const radiusWorld = 0.00055 + galaxy.size * 0.0007;
+      const radius = Math.max(0.55, radiusWorld / span * rect.h * birthFade);
+      const marginX = Math.min(0.45, (radius * 6) / rect.w);
+      const marginY = Math.min(0.45, (radius * 6) / rect.h);
+      if (screen.x < -marginX || screen.x > 1 + marginX || screen.y < -marginY || screen.y > 1 + marginY) continue;
+      const x = rect.x + screen.x * rect.w - p.width / 2;
+      const y = rect.y + screen.y * rect.h - p.height / 2;
+      markers.push({ galaxy, x, y, radius });
 
-      if (galaxy.type === 'SPIRAL' && galaxy.mass > 0.42 && rect.w > 260) {
-        p.push();
-        p.translate(x, y);
-        p.rotate(galaxy.rotation);
-        p.stroke(244, 185, 95, 48 * birthFade);
-        p.strokeWeight(0.55);
-        for (let arm = 0; arm < galaxy.arms; arm += 1) {
-          p.beginShape();
-          for (let step = 0; step < 10; step += 1) {
-            const t = step / 9;
-            const angle = t * Math.PI * 1.2 + arm * MathX.TAU / galaxy.arms;
-            const radius = t * size * 1.45;
-            p.vertex(Math.cos(angle) * radius, Math.sin(angle) * radius * 0.48);
-          }
-          p.endShape();
-        }
-        p.pop();
+      if (!state.layers.stars) continue;
+      if (state.layers.halos && galaxy.mass > 0.24) {
+        p.stroke(82, 137, 239, 15 + galaxy.mass * 27);
+        p.strokeWeight(Math.max(0.6, Math.min(1.4, radius * 0.016)));
+        p.circle(x, y, radius * (5.2 + galaxy.mass * 1.4));
       }
+      p.push();
+      p.translate(x, y);
+      drawGalaxyMorphology(p, universe, galaxy, index, radius, birthFade);
+      p.pop();
     }
     p.blendMode(p.BLEND);
+    if (state.layers.tension) markers.forEach((marker) => drawFormationTension(p, marker, rect, zoom));
     p.pop();
   }
 
@@ -826,17 +1282,16 @@
     });
 
     if (state.viewMode === 'divergence' && state.comparison) {
-      const gap = 2;
-      const half = (state.layout.cosmos.w - gap) / 2;
-      const aRect = { ...state.layout.cosmos, w: half };
-      const bRect = { x: state.layout.cosmos.x + half + gap, y: 0, w: half, h: state.layout.cosmos.h };
-      renderCosmos(p, state.comparison.base, aRect, state.comparison.base, 0);
-      renderCosmos(p, state.comparison.twin, bRect, state.comparison.base, state.phaseLink);
-      p.push();
-      p.stroke(235, 99, 180, 110);
-      p.strokeWeight(1);
-      p.line(bRect.x - 1 - p.width / 2, -p.height / 2, bRect.x - 1 - p.width / 2, p.height / 2);
-      p.pop();
+      const [aRect, bRect] = cosmosRects();
+      if (aRect && bRect) {
+        renderCosmos(p, state.comparison.base, aRect, state.comparison.base, 0);
+        renderCosmos(p, state.comparison.twin, bRect, state.comparison.base, state.phaseLink);
+        p.push();
+        p.stroke(235, 99, 180, 110);
+        p.strokeWeight(1);
+        p.line(bRect.x - 1 - p.width / 2, -p.height / 2, bRect.x - 1 - p.width / 2, p.height / 2);
+        p.pop();
+      }
     } else {
       renderCosmos(p, selected, state.layout.cosmos);
     }
@@ -917,19 +1372,44 @@
     if (cosmos.w > 1) p.rect(cosmos.x, cosmos.y, cosmos.w, cosmos.h);
 
     const universe = state.selected || ambientUniverse;
+    const cosmosAspect = cosmos.w / Math.max(1, cosmos.h);
+    const cosmosView = cameraView();
+    const cosmosSpan = MathX.cosmicFitSpan(cosmosAspect) * cosmosView.scale;
     p.noFill();
     for (let index = 1; cosmos.w > 1 && index < universe.attractor.length; index += 8) {
       const a = universe.attractor[index - 1];
       const b = universe.attractor[index];
+      const aScreen = MathX.cosmicFieldToScreen(a.x, a.y, cosmosView, cosmosAspect);
+      const bScreen = MathX.cosmicFieldToScreen(b.x, b.y, cosmosView, cosmosAspect);
+      if (aScreen.x < 0 || aScreen.x > 1 || aScreen.y < 0 || aScreen.y > 1
+        || bScreen.x < 0 || bScreen.x > 1 || bScreen.y < 0 || bScreen.y > 1) continue;
       p.stroke(52, 107, 165, 32);
-      p.line(cosmos.x + a.x * cosmos.w, cosmos.y + a.y * cosmos.h, cosmos.x + b.x * cosmos.w, cosmos.y + b.y * cosmos.h);
+      p.line(
+        cosmos.x + aScreen.x * cosmos.w,
+        cosmos.y + aScreen.y * cosmos.h,
+        cosmos.x + bScreen.x * cosmos.w,
+        cosmos.y + bScreen.y * cosmos.h
+      );
     }
-    if (state.selected && state.layers.stars) {
+    if (state.selected && (state.layers.stars || state.layers.tension)) {
       state.selected.galaxies.forEach((galaxy, index) => {
         if (index % 2 || galaxy.birth > state.age) return;
-        p.stroke(235, 214, 173, 130);
-        p.strokeWeight(Math.max(1, galaxy.size * 0.35));
-        p.point(cosmos.x + galaxy.x * cosmos.w, cosmos.y + galaxy.y * cosmos.h);
+        const screen = MathX.cosmicFieldToScreen(galaxy.x, galaxy.y, cosmosView, cosmosAspect);
+        if (screen.x < 0 || screen.x > 1 || screen.y < 0 || screen.y > 1) return;
+        const x = cosmos.x + screen.x * cosmos.w;
+        const y = cosmos.y + screen.y * cosmos.h;
+        const radius = Math.max(1, (0.00055 + galaxy.size * 0.0007) / cosmosSpan * cosmos.h);
+        if (state.layers.stars) {
+          p.stroke(235, 214, 173, 130);
+          p.strokeWeight(Math.max(1, Math.min(6, radius * 0.65)));
+          p.point(x, y);
+        }
+        if (state.layers.tension && (galaxy.tensionRank < 6 || galaxy.id === state.cosmosCamera.inspectId)) {
+          p.noFill();
+          p.stroke(235, 99, 180, 130);
+          p.strokeWeight(1);
+          p.circle(x, y, Math.max(10, radius * 5));
+        }
       });
     }
     if (state.selected) drawSafePaths(p, state.selected.strands, 220);
@@ -1109,12 +1589,15 @@
       };
 
       p.draw = () => {
+        const now = performance.now();
         if (state.screensaver.active) {
-          const now = performance.now();
           if (now >= state.screensaver.nextAt) autoGenerateUniverse();
+          if (now >= state.screensaver.nextCameraAt) tourCosmosCamera(now);
           if (p.frameCount % 12 === 0) {
             const remaining = Math.max(0, Math.ceil((state.screensaver.nextAt - now) / 1000));
-            $('#screensaver-status').textContent = `NEXT GENOME IN ${remaining}s · ${state.universes.length} BOTTLED`;
+            const depth = 1 / Math.max(COSMOS_MIN_SCALE, state.cosmosCamera.scale);
+            const depthLabel = state.focusView === 'both' ? 'DUAL DEPTH' : 'DEPTH';
+            $('#screensaver-status').textContent = `NEXT GENOME IN ${remaining}s · ${depthLabel} ${depth < 10 ? depth.toFixed(1) : Math.round(depth)}× · ${state.universes.length} BOTTLED`;
           }
         }
         if (state.playing && state.selected && !state.contextLost) {
@@ -1122,6 +1605,9 @@
           if (state.age >= 1) state.playing = false;
           if (p.frameCount % 4 === 0) updateAgeUI();
         }
+        updateCosmosCamera(p.deltaTime || 16.67);
+        updateFractalTourCamera(p.deltaTime || 16.67);
+        if (p.frameCount % 5 === 0) updateCosmosCameraUI();
         renderFrame(p);
         tickFrameStats(p);
       };
@@ -1129,17 +1615,34 @@
       p.windowResized = () => {
         p.resizeCanvas(Math.max(10, host.clientWidth), Math.max(10, host.clientHeight));
         state.layout = calculateLayout(p.width, p.height);
+        reclampCosmosCamera();
         syncLayoutDOM();
       };
 
       p.mousePressed = () => {
         state.pointer = { x: p.mouseX, y: p.mouseY };
-        if (!state.layout || !pointerIn(state.layout.source, p.mouseX, p.mouseY)) return;
-        if (state.tool === 'draw' && !state.spaceHeld) {
+        if (!state.layout) return;
+        const cosmosRect = cosmosRectAt(p.mouseX, p.mouseY);
+        if (cosmosRect && state.selected) {
+          const camera = state.cosmosCamera;
+          camera.targetX = camera.x;
+          camera.targetY = camera.y;
+          camera.targetScale = camera.scale;
+          camera.inspectId = null;
+          camera.motion = 'manual';
+          state.cosmosPanning = true;
+          state.cosmosPanOrigin = { x: p.mouseX, y: p.mouseY };
+          state.cosmosViewOrigin = cameraView();
+          state.cosmosPanRect = { ...cosmosRect };
+          host.classList.add('is-cosmos-panning');
+          return;
+        }
+        if (!pointerIn(state.layout.source, p.mouseX, p.mouseY)) return;
+        if (state.tool === 'draw') {
           state.drawing = true;
           state.currentStroke = [makePoint(p.mouseX, p.mouseY)];
           $('#empty-callout').classList.add('is-hidden');
-        } else if (state.tool === 'pan' || state.spaceHeld) {
+        } else if (state.tool === 'pan') {
           state.panning = true;
           state.panOrigin = { x: p.mouseX, y: p.mouseY };
           state.viewOrigin = { ...state.view };
@@ -1152,7 +1655,29 @@
       p.mouseDragged = () => {
         state.pointer = { x: p.mouseX, y: p.mouseY };
         updateCoordinateReadout(p.mouseX, p.mouseY);
-        if (state.drawing && state.currentStroke && pointerIn(state.layout.source, p.mouseX, p.mouseY)) {
+        if (state.cosmosPanning && state.cosmosPanRect) {
+          const rect = state.cosmosPanRect;
+          const aspect = rect.w / Math.max(1, rect.h);
+          const span = MathX.cosmicFitSpan(aspect) * state.cosmosViewOrigin.scale;
+          const dx = (p.mouseX - state.cosmosPanOrigin.x) / rect.w;
+          const dy = (p.mouseY - state.cosmosPanOrigin.y) / rect.h;
+          const next = MathX.clampCosmicView({
+            x: state.cosmosViewOrigin.x - dx * span * aspect,
+            y: state.cosmosViewOrigin.y - dy * span,
+            scale: state.cosmosViewOrigin.scale
+          }, aspect, COSMOS_MIN_SCALE, 1);
+          Object.assign(state.cosmosCamera, {
+            x: next.x,
+            y: next.y,
+            scale: next.scale,
+            targetX: next.x,
+            targetY: next.y,
+            targetScale: next.scale,
+            inspectId: null,
+            motion: 'manual'
+          });
+          updateCosmosCameraUI();
+        } else if (state.drawing && state.currentStroke && pointerIn(state.layout.source, p.mouseX, p.mouseY)) {
           const next = makePoint(p.mouseX, p.mouseY);
           const previous = state.currentStroke[state.currentStroke.length - 1];
           const pixelDistance = Math.hypot((next.x - previous.x) * state.layout.source.w, (next.y - previous.y) * state.layout.source.h);
@@ -1172,24 +1697,51 @@
       p.mouseReleased = () => {
         if (state.drawing) completeStroke();
         state.panning = false;
+        state.cosmosPanning = false;
+        state.cosmosPanRect = null;
         host.classList.remove('is-panning');
+        host.classList.remove('is-cosmos-panning');
       };
 
       p.mouseMoved = () => {
         state.pointer = { x: p.mouseX, y: p.mouseY };
         updateCoordinateReadout(p.mouseX, p.mouseY);
         updateProbe(p.mouseX, p.mouseY, state.tool === 'probe');
+        host.classList.toggle('is-cosmos-hover', Boolean(state.selected && cosmosRectAt(p.mouseX, p.mouseY)));
+      };
+
+      p.mouseOut = () => {
+        if (!state.cosmosPanning) host.classList.remove('is-cosmos-hover');
       };
 
       p.mouseWheel = (event) => {
-        if (!state.layout || !pointerIn(state.layout.source, p.mouseX, p.mouseY)) return true;
-        const before = eventToComplex(p.mouseX, p.mouseY);
-        const factor = Math.exp(MathX.clamp(event.delta * 0.0012, -0.35, 0.35));
-        state.view.scale = MathX.clamp(state.view.scale * factor, 0.000015, 4.2);
-        const after = eventToComplex(p.mouseX, p.mouseY);
-        state.view.x += before.x - after.x;
-        state.view.y += before.y - after.y;
-        updateCoordinateReadout(p.mouseX, p.mouseY);
+        if (!state.layout) return true;
+        let delta = Number(event.delta ?? event.deltaY ?? 0);
+        if (event.deltaMode === 1) delta *= 16;
+        if (event.deltaMode === 2) delta *= Math.max(1, state.layout.source.h || state.layout.cosmos.h);
+        if (pointerIn(state.layout.source, p.mouseX, p.mouseY)) {
+          const before = eventToComplex(p.mouseX, p.mouseY);
+          const factor = Math.exp(MathX.clamp(delta * 0.0012, -0.35, 0.35));
+          state.view.scale = MathX.clamp(state.view.scale * factor, 0.000015, 4.2);
+          const after = eventToComplex(p.mouseX, p.mouseY);
+          state.view.x += before.x - after.x;
+          state.view.y += before.y - after.y;
+          updateCoordinateReadout(p.mouseX, p.mouseY);
+          return false;
+        }
+        const cosmosRect = cosmosRectAt(p.mouseX, p.mouseY);
+        if (cosmosRect && state.selected) {
+          const factor = Math.exp(MathX.clamp(delta * 0.0015, -0.42, 0.42));
+          zoomCosmosAt(p.mouseX, p.mouseY, factor, { rect: cosmosRect });
+          return false;
+        }
+        return true;
+      };
+
+      p.doubleClicked = () => {
+        const rect = cosmosRectAt(p.mouseX, p.mouseY);
+        if (!rect || !state.selected) return true;
+        zoomCosmosAt(p.mouseX, p.mouseY, 0.25, { rect });
         return false;
       };
     }, host);
@@ -1224,7 +1776,7 @@
     }
     if (state.age >= 1 && !state.playing) state.age = 0;
     state.playing = !state.playing;
-    $('#play-button').classList.toggle('is-playing', state.playing);
+    updatePlayButton();
     announce(state.playing ? 'Model time running.' : 'Model time suspended.');
   }
 
@@ -1314,6 +1866,24 @@
     });
     $('#ignite-button').addEventListener('click', igniteBundle);
     $('#reset-view').addEventListener('click', resetFractalView);
+    $('#cosmos-camera-reset').addEventListener('click', () => resetCosmosCamera());
+    $('#cosmos-zoom-in').addEventListener('click', () => {
+      const rect = activeCosmosRect();
+      zoomCosmosAt(rect.x + rect.w / 2, rect.y + rect.h / 2, 0.5, { rect });
+    });
+    $('#cosmos-zoom-out').addEventListener('click', () => {
+      const rect = activeCosmosRect();
+      zoomCosmosAt(rect.x + rect.w / 2, rect.y + rect.h / 2, 2, { rect });
+    });
+    const cosmosZoomControl = $('#cosmos-zoom-control');
+    cosmosZoomControl.addEventListener('input', () => {
+      const nextScale = 1 / (2 ** Number(cosmosZoomControl.value));
+      setCosmosCameraTarget({
+        x: state.cosmosCamera.targetX,
+        y: state.cosmosCamera.targetY,
+        scale: nextScale
+      });
+    });
     $('#fork-button').addEventListener('click', forkTwin);
     $('#play-button').addEventListener('click', togglePlaying);
 
@@ -1357,6 +1927,7 @@
     $('#export-genome').addEventListener('click', exportGenome);
     $('#export-image').addEventListener('click', exportImage);
     $('#copy-seed').addEventListener('click', () => state.selected && copyText(state.selected.genome.seedHex, `Seed ${state.selected.genome.seedHex} copied.`));
+    $('#inspect-tension').addEventListener('click', inspectHighestTension);
     $('#rename-universe').addEventListener('click', () => {
       if (!state.selected) return;
       const name = window.prompt('Name this universe', state.selected.name)?.trim();
@@ -1372,6 +1943,8 @@
       state.selected = null;
       state.comparison = null;
       state.bundle = [];
+      state.cosmosViews.clear();
+      state.cosmosCamera = makeCosmosCamera();
       state.age = 0;
       renderArchive();
       updateSelectedUI();
@@ -1424,7 +1997,9 @@
     $('#copy-diagnostics').addEventListener('click', () => copyText(JSON.stringify(state.diagnostics, null, 2), 'Render diagnostics copied.'));
 
     window.addEventListener('keydown', (event) => {
-      const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '');
+      const activeElement = document.activeElement;
+      const typing = /INPUT|SELECT|TEXTAREA/.test(activeElement?.tagName || '') || activeElement?.isContentEditable;
+      const activatesControl = activeElement?.matches?.('button, a[href], summary, [role="button"], [role="slider"]');
       if (event.key === 'Escape') {
         if (state.screensaver.active) {
           stopScreensaver();
@@ -1438,11 +2013,10 @@
         }
         return;
       }
-      if (typing) return;
+      if (typing || activatesControl || $('dialog[open]')) return;
       if (event.key === ' ') {
         event.preventDefault();
-        state.spaceHeld = true;
-        if (document.activeElement !== host) togglePlaying();
+        if (!event.repeat) togglePlaying();
       }
       if (event.key.toLowerCase() === 'd') setTool('draw');
       if (event.key.toLowerCase() === 'h') setTool('pan');
@@ -1450,6 +2024,15 @@
       if (event.key.toLowerCase() === 'n') newGenome();
       if (event.key.toLowerCase() === 'f') resetFractalView();
       if (event.key.toLowerCase() === 'b') forkTwin();
+      if ((event.key === '+' || event.key === '=') && state.selected) {
+        const rect = activeCosmosRect();
+        zoomCosmosAt(rect.x + rect.w / 2, rect.y + rect.h / 2, 0.5, { rect });
+      }
+      if (event.key === '-' && state.selected) {
+        const rect = activeCosmosRect();
+        zoomCosmosAt(rect.x + rect.w / 2, rect.y + rect.h / 2, 2, { rect });
+      }
+      if (event.key === '0' && state.selected) resetCosmosCamera();
       if (event.key === 'Enter' && state.creationMode === 'bundle') igniteBundle();
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && state.bundle.length) {
         event.preventDefault();
@@ -1459,9 +2042,6 @@
         $('#ignite-button').disabled = state.bundle.length === 0;
       }
       if (event.key === '?') openDialog(helpDialog);
-    });
-    window.addEventListener('keyup', (event) => {
-      if (event.key === ' ') state.spaceHeld = false;
     });
     document.addEventListener('fullscreenchange', () => {
       if (state.screensaver.active && !document.fullscreenElement && !window.cosmosAPI) stopScreensaver(false);
@@ -1475,6 +2055,9 @@
   setupP5();
   window.ButterflyFXDiagnostics = Object.freeze({
     renderOnce: () => state.p?.redraw(),
+    resetUniverseCamera: () => resetCosmosCamera({ quiet: true, immediate: true }),
+    setUniverseCamera: (view) => setCosmosCameraTarget(view, { immediate: true }),
+    tourUniverseCamera: () => tourCosmosCamera(performance.now()),
     status: () => ({
       webglReady: state.webglReady,
       webgl2: state.webgl2,
@@ -1483,9 +2066,30 @@
       renderer: state.diagnostics?.webgl?.renderer || null,
       focusView: state.focusView,
       screensaverActive: state.screensaver.active,
+      screensaverView: state.screensaver.view,
+      screensaverFractalHome: state.screensaver.fractalHome ? { ...state.screensaver.fractalHome } : null,
+      screensaverFractalTarget: state.screensaver.fractalTarget ? { ...state.screensaver.fractalTarget } : null,
       universeCount: state.universes.length,
+      selectedUniverseId: state.selected?.id || null,
+      archiveIds: state.universes.map((universe) => universe.id),
       selectedPointCount: state.selected?.strands?.[0]?.points?.length || 0,
       selectedPointHead: state.selected?.strands?.[0]?.points?.slice(0, 5).map((point) => [point.x, point.y, point.cx, point.cy]) || [],
+      fractalView: { ...state.view },
+      universeCamera: {
+        x: state.cosmosCamera.x,
+        y: state.cosmosCamera.y,
+        scale: state.cosmosCamera.scale,
+        zoom: 1 / state.cosmosCamera.scale,
+        targetX: state.cosmosCamera.targetX,
+        targetY: state.cosmosCamera.targetY,
+        targetScale: state.cosmosCamera.targetScale,
+        inspectId: state.cosmosCamera.inspectId
+      },
+      layout: state.layout ? {
+        source: { ...state.layout.source },
+        loom: { ...state.layout.loom },
+        cosmos: { ...state.layout.cosmos }
+      } : null,
       fps: state.fps
     })
   });

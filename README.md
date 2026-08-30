@@ -13,10 +13,12 @@ The same app runs as a static browser edition for GitHub Pages.
 - `Weave`: multiple role-aware strands interfere as one genome.
 - Deterministic Lorenz, Rössler, and Clifford attractor regimes.
 - A GPU density field that grows from perturbations into voids, iso-density “bubble” contours, filaments, halos, gas, and luminous galaxy proxies.
+- A persistent, cursor-anchored universe camera with smooth pan and `1×–128×` magnification. The shader reevaluates world-space structure at every scale, progressively resolving sub-filaments, halo knots, galaxy morphology, stellar clusters, and satellites instead of enlarging cached pixels.
 - A Butterfly Twin laboratory: offset one path sample by `ε = 10⁻⁸`, preserve a chosen fraction of shared large-scale phases, and watch structure diverge.
 - Classical phase correlation as an explicitly labeled “entanglement” analogy.
 - A violet → cyan → amber → white order/“negentropy” proxy. It measures organization inside this model, not negative thermodynamic entropy.
-- `Both`, `Mandelbrot`, and `Universe` compositions plus a fullscreen Autogen screensaver that continually draws, births, evolves, and archives new worlds.
+- An optional magenta `Formation Tension` diagnostic that calls out galaxy proxies whose mass, birth time, spiral order, turbulence, spin, or thermal state strain the toy model’s own causal mapping. It is not a real-world impossibility score.
+- `Both`, `Mandelbrot`, and `Universe` compositions plus a fullscreen Autogen screensaver that continually draws, births, evolves, and archives new worlds. Its default dual-pane choreography dives into a contributing Mandelbrot sample and an unusual galaxy about every five seconds, then reframes both.
 - Model-time playback, layer controls, archive cards, PNG capture, and portable JSON genome bottles.
 - Live WebGL/Electron diagnostics, context-loss handling, and a usable CPU Safe Preview when WebGL is unavailable.
 - An in-app science manual that distinguishes measured mathematics, invented mappings, physics-inspired approximations, emergent output, and the boundary of the claim.
@@ -61,7 +63,7 @@ Conceptual anchors include [Lorenz’s deterministic nonperiodic flow](https://d
 
 ## Run the desktop app
 
-Requirements: Node.js 20+ and a graphics driver with WebGL support.
+Requirements: Node.js 22.12+ and a graphics driver with WebGL support.
 
 ```bash
 npm install
@@ -84,28 +86,33 @@ Open <http://127.0.0.1:4173>. The browser edition keeps creation, comparison, fu
 | Input | Action |
 | --- | --- |
 | Drag on Mandelbrot | Draw a causal strand |
-| Mouse wheel | Zoom at pointer |
+| Mouse wheel over Mandelbrot | Zoom parameter space at the pointer |
+| Mouse wheel over universe | Smoothly magnify world-space structure at the pointer |
+| Drag on universe | Pan the generated field |
+| Double-click universe | Dive four times deeper at the pointer |
 | `D` / `H` / `P` | Draw / pan / probe |
 | `N` | Start a clean genome |
 | `Enter` | Ignite a woven bundle |
 | `B` | Fork a Butterfly Twin |
 | `F` | Restore the Mandelbrot frame |
+| `+` / `−` / `0` | Dive / retreat / frame the universe camera |
 | `Space` | Play or pause model time |
 | `Ctrl/Cmd + Z` | Remove the latest unignited strand |
 | `Escape` | Leave Autogen/fullscreen or close a dialog |
 
-The top-right `VIEW` control cycles between the relational split view, a full Mandelbrot source, and a full universe. `AUTOGEN ⛶` opens the configurable screensaver.
+The top-right `VIEW` control cycles between the relational split view, a full Mandelbrot source, and a full universe. `AUTOGEN ⛶` opens the configurable screensaver. `INSPECT ODD GALAXY` targets the selected universe’s highest internal Formation Tension score and opens it at galaxy scale.
 
 ## Test and package
 
 ```bash
 npm run check
+npm run smoke      # headless Electron/WebGL integration smoke
 npm run build      # unpacked desktop build
 npm run dist       # platform installer/image
 npm run pages:prepare
 ```
 
-The deterministic tests cover coordinate transforms, arc-length resampling, genome reproducibility, epsilon twins, Mandelbrot interior/exterior classification, and portable serialization.
+The deterministic tests cover Mandelbrot and cosmic-camera coordinate transforms, cursor anchoring and camera bounds, arc-length resampling, genome/galaxy reproducibility, formation-tension metadata, epsilon twins, Mandelbrot interior/exterior classification, and portable serialization. The Electron smoke harness additionally checks GPU shader compilation, wheel zoom, pan, reset, per-universe camera memory, dual-pane Autogen choreography, fullscreen behavior, and all three compositions.
 
 ## Project layout
 
