@@ -1,0 +1,55 @@
+{
+  "name": "butterfly-fx-universe-loom",
+  "version": "1.0.0",
+  "description": "A GPU-accelerated p5.js cosmogenesis instrument: draw through the Mandelbrot set and grow deterministic universes.",
+  "main": "electron/main.cjs",
+  "author": "Butterfly FX",
+  "license": "MIT",
+  "scripts": {
+    "postinstall": "node scripts/copy-vendor.cjs",
+    "prestart": "node scripts/copy-vendor.cjs",
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "web": "node scripts/serve.cjs",
+    "pages:prepare": "node scripts/prepare-pages.cjs",
+    "test": "node --test",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check src/simulation.js && node --check src/shaders.js && node --check src/app.js && node --test",
+    "prebuild": "node scripts/copy-vendor.cjs",
+    "build": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "p5": "1.11.13"
+  },
+  "devDependencies": {
+    "electron": "43.4.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "studio.butterflyfx.universeloom",
+    "productName": "Butterfly FX — Universe Loom",
+    "asar": true,
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "LICENSE",
+      "LICENSES/**/*",
+      "THIRD_PARTY_NOTICES.md",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Education;Science;Graphics"
+    },
+    "mac": {
+      "category": "public.app-category.education"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}

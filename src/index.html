@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Butterfly FX — Universe Loom</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="command-bar">
+      <div class="brand-block" aria-label="Butterfly FX Universe Loom">
+        <div class="brand-sigil" aria-hidden="true">
+          <span></span><span></span><i></i>
+        </div>
+        <div>
+          <div class="brand-kicker">BUTTERFLY <b>//</b> FX</div>
+          <h1>UNIVERSE LOOM</h1>
+        </div>
+      </div>
+
+      <nav class="view-modes" aria-label="Workspace mode">
+        <button class="mode-button is-active" data-view="weave" aria-pressed="true">WEAVE</button>
+        <button class="mode-button" data-view="evolve" aria-pressed="false">EVOLVE</button>
+        <button class="mode-button" data-view="divergence" aria-pressed="false">DIVERGENCE</button>
+      </nav>
+
+      <div class="command-actions">
+        <button class="compact-action" id="focus-view-button" title="Cycle canvas composition">VIEW · BOTH</button>
+        <button class="compact-action autogen-action" id="screensaver-button" title="Fullscreen procedural screensaver">AUTOGEN ⛶</button>
+        <span class="model-badge" title="This is a physics-inspired generative analogy">MODEL, NOT THEORY</span>
+        <button class="text-action" id="science-button">SCIENCE NOTES</button>
+        <button class="text-action" id="license-button">OPEN SOURCE</button>
+        <button class="gpu-badge is-checking" id="gpu-button" aria-haspopup="dialog">
+          <span class="gpu-light"></span>
+          <span id="gpu-label">GPU · CHECKING</span>
+          <span id="fps-label">-- FPS</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-workspace">
+      <aside class="control-deck" aria-label="Universe controls">
+        <section class="deck-section creation-section">
+          <div class="section-heading">
+            <span>01 / CAUSAL INPUT</span>
+            <button class="icon-button" id="help-button" title="How to use Universe Loom" aria-label="How to use Universe Loom">?</button>
+          </div>
+          <p class="instruction">Drag through the luminous boundary. The path becomes a deterministic cosmic genome.</p>
+
+          <div class="segmented" role="group" aria-label="Creation behavior">
+            <button class="creation-mode is-active" data-creation="branch" aria-pressed="true">
+              <b>BRANCH</b><small>one line → one cosmos</small>
+            </button>
+            <button class="creation-mode" data-creation="bundle" aria-pressed="false">
+              <b>WEAVE</b><small>many lines → one cosmos</small>
+            </button>
+          </div>
+
+          <div class="tool-row" role="toolbar" aria-label="Mandelbrot tools">
+            <button class="tool-button is-active" data-tool="draw" title="Draw (D)" aria-pressed="true"><span>⌁</span> DRAW</button>
+            <button class="tool-button" data-tool="pan" title="Pan (H)" aria-pressed="false"><span>✣</span> PAN</button>
+            <button class="tool-button" data-tool="probe" title="Probe (P)" aria-pressed="false"><span>⊙</span> PROBE</button>
+          </div>
+
+          <label class="select-label" for="strand-role">STRAND ROLE</label>
+          <select id="strand-role">
+            <option value="AUTO">AUTO / read the geometry</option>
+            <option value="DENSITY">DENSITY / amplify knots</option>
+            <option value="TURBULENCE">TURBULENCE / wrinkle filaments</option>
+            <option value="SPIN">SPIN / bias angular flow</option>
+            <option value="VOID">VOID / widen basins</option>
+          </select>
+
+          <div class="button-grid">
+            <button id="new-genome">NEW GENOME <kbd>N</kbd></button>
+            <button id="undo-strand" disabled>UNDO LINE <kbd>⌘Z</kbd></button>
+            <button class="primary-button" id="ignite-button" disabled>IGNITE BUNDLE <kbd>↵</kbd></button>
+            <button id="reset-view">FRAME SET <kbd>F</kbd></button>
+          </div>
+        </section>
+
+        <section class="deck-section genome-section">
+          <div class="section-heading"><span>02 / LIVE GENOME</span><span id="sample-count">0 SAMPLES</span></div>
+          <div class="gene-list" id="gene-list">
+            <div class="gene-row" data-gene="density"><i></i><span>DENSITY</span><div><b></b></div><output>—</output></div>
+            <div class="gene-row" data-gene="turbulence"><i></i><span>TURBULENCE</span><div><b></b></div><output>—</output></div>
+            <div class="gene-row" data-gene="peakSeeds"><i></i><span>PEAK SEEDS</span><div><b></b></div><output>—</output></div>
+            <div class="gene-row" data-gene="spin"><i></i><span>SPIN</span><div><b></b></div><output>—</output></div>
+            <div class="gene-row" data-gene="voidBias"><i></i><span>VOID BIAS</span><div><b></b></div><output>—</output></div>
+          </div>
+          <div class="coordinate-readout">
+            <span>c =</span><output id="complex-coordinate">−0.500000 + 0.000000i</output>
+            <span>ZOOM</span><output id="zoom-level">1.00×</output>
+          </div>
+        </section>
+
+        <section class="deck-section model-section">
+          <div class="section-heading"><span>03 / MODEL DIALS</span><span>GPU UNIFORMS</span></div>
+          <label class="range-control">
+            <span><b>ITERATION DEPTH</b><output id="iteration-value">180</output></span>
+            <input id="iteration-control" type="range" min="60" max="260" step="10" value="180">
+          </label>
+          <label class="range-control">
+            <span><b>DARK FIELD GAIN</b><output id="dark-value">1.00</output></span>
+            <input id="dark-control" type="range" min="0" max="2" step="0.01" value="1">
+          </label>
+          <label class="range-control">
+            <span><b>EMERGENCE GAIN</b><output id="emergence-value">1.00</output></span>
+            <input id="emergence-control" type="range" min="0.25" max="1.75" step="0.01" value="1">
+          </label>
+          <label class="range-control phase-link-control is-hidden">
+            <span><b>PHASE LINK <em>ANALOG</em></b><output id="phase-link-value">68%</output></span>
+            <input id="phase-link-control" type="range" min="0" max="1" step="0.01" value="0.68">
+          </label>
+        </section>
+      </aside>
+
+      <section class="instrument-stage" id="instrument-stage" aria-label="Interactive Mandelbrot and universe canvas">
+        <div id="canvas-host" tabindex="0" role="application" aria-describedby="canvas-instructions"></div>
+        <p class="sr-only" id="canvas-instructions">Use Draw mode and drag on the left Mandelbrot pane to create a universe. Use the mouse wheel to zoom. Use Pan mode to move the fractal view.</p>
+
+        <div class="stage-label source-stage-label">
+          <span>MANDELBROT / SOURCE</span>
+          <b id="source-state">C-SPACE · READY</b>
+        </div>
+        <div class="stage-label universe-stage-label">
+          <span>UNIVERSE / CONSEQUENCE</span>
+          <b id="universe-state">NO COSMOS YET</b>
+        </div>
+
+        <div class="loom-overlay" id="loom-overlay" aria-hidden="true">
+          <div class="loom-title"><span>TRANSFER</span><b>LOOM</b></div>
+          <div class="attractor-glyph"><span></span><i></i><b></b></div>
+          <div class="loom-channels">
+            <i data-channel="density"></i>
+            <i data-channel="turbulence"></i>
+            <i data-channel="peakSeeds"></i>
+            <i data-channel="spin"></i>
+            <i data-channel="voidBias"></i>
+          </div>
+          <div class="loom-caption" id="attractor-caption">STRANGE ATTRACTOR<br><b>AWAITING SIGNAL</b></div>
+        </div>
+
+        <div class="empty-callout" id="empty-callout">
+          <div class="callout-index">01</div>
+          <div>
+            <b>DRAW THROUGH THE EDGE</b>
+            <span>Sample instability → bend an attractor → grow a cosmos.</span>
+          </div>
+          <button id="dismiss-callout" aria-label="Dismiss tip">×</button>
+        </div>
+
+        <div class="probe-readout" id="probe-readout" aria-hidden="true">
+          <b>ORBIT PROBE</b>
+          <span id="probe-coordinate">c —</span>
+          <span id="probe-iteration">escape —</span>
+        </div>
+
+        <div class="universe-hud" id="universe-hud" hidden>
+          <div><span>SEED</span><b id="hud-seed">—</b></div>
+          <div><span>ATTRACTOR</span><b id="hud-attractor">—</b></div>
+          <div><span>HALO PROXIES</span><b id="hud-halos">—</b></div>
+          <div><span>MODEL AGE</span><b id="hud-age">0.0</b></div>
+          <div class="order-legend"><span>ORDER / “NEGENTROPY” PROXY</span><i class="order-gradient"></i><b id="hud-order">0%</b></div>
+        </div>
+
+        <div class="divergence-hud" id="divergence-hud" hidden>
+          <span>A ↔ A′ STRUCTURE DIVERGENCE</span>
+          <div><b id="divergence-bar"></b></div>
+          <output id="divergence-value">0%</output>
+          <small id="correlation-label">68% phases linked · classical correlation</small>
+        </div>
+
+        <div class="screensaver-hud" id="screensaver-hud" hidden>
+          <div><span>AUTOGEN / COSMIC SCREENSAVER</span><b id="screensaver-status">NEXT GENOME IN 20s</b></div>
+          <button id="screensaver-cycle-view" title="Cycle screensaver composition">BOTH</button>
+          <button id="screensaver-exit">EXIT <kbd>ESC</kbd></button>
+        </div>
+      </section>
+
+      <aside class="archive-deck" aria-label="Multiverse archive">
+        <section class="archive-header">
+          <div>
+            <span>MULTIVERSE ARCHIVE</span>
+            <b id="universe-count">00 UNIVERSES</b>
+          </div>
+          <button class="icon-button" id="clear-archive" title="Clear archive" aria-label="Clear universe archive">⌫</button>
+        </section>
+
+        <div class="universe-list" id="universe-list">
+          <div class="archive-empty">
+            <span class="orbit-icon"></span>
+            <b>NO UNIVERSES BOTTLED</b>
+            <p>Every completed line will become a replayable branch here.</p>
+          </div>
+        </div>
+
+        <section class="selected-universe" id="selected-universe" hidden>
+          <div class="selected-title">
+            <div><span>SELECTED BRANCH</span><h2 id="selected-name">Universe —</h2></div>
+            <button id="rename-universe" class="icon-button" title="Rename universe">✎</button>
+          </div>
+          <dl>
+            <div><dt>GENOME</dt><dd id="selected-seed">—</dd></div>
+            <div><dt>STRANDS</dt><dd id="selected-strands">—</dd></div>
+            <div><dt>DARK : BARYON</dt><dd id="selected-ratio">—</dd></div>
+            <div><dt>REGIME</dt><dd id="selected-attractor">—</dd></div>
+          </dl>
+          <div class="selected-actions">
+            <button class="accent-button" id="fork-button">BUTTERFLY TWIN <kbd>B</kbd></button>
+            <button id="export-genome">BOTTLE JSON</button>
+            <button id="export-image">CAPTURE PNG</button>
+            <button id="copy-seed">COPY SEED</button>
+          </div>
+        </section>
+
+        <section class="causal-pipeline">
+          <div class="section-heading"><span>CAUSAL PIPELINE</span><span>INSPECT</span></div>
+          <button data-note="mandelbrot"><i>01</i><b>FRACTAL SPECTRUM</b><span>c → escape signal</span></button>
+          <button data-note="attractor"><i>02</i><b>STRANGE ATTRACTOR</b><span>signal → bounded chaos</span></button>
+          <button data-note="field"><i>03</i><b>PHASE FIELD</b><span>flow → correlated modes</span></button>
+          <button data-note="darkmatter"><i>04</i><b>DARK WEB</b><span>density → filament + halo</span></button>
+          <button data-note="galaxies"><i>05</i><b>GALAXY PROXIES</b><span>knots → luminous structure</span></button>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="epoch-deck">
+      <button class="play-button" id="play-button" aria-label="Play cosmic evolution"><span></span></button>
+      <div class="epoch-track">
+        <div class="epoch-heading">
+          <span>MODEL TIME / EMERGENCE</span>
+          <output id="age-label">0.00 · INITIAL FIELD</output>
+        </div>
+        <input id="age-control" type="range" min="0" max="1" step="0.001" value="0" aria-label="Model age">
+        <div class="epoch-marks" aria-hidden="true">
+          <span style="--mark: 0%">INITIAL<br>PERTURBATION</span>
+          <span style="--mark: 18%">DARK<br>AGES</span>
+          <span style="--mark: 36%">FIRST<br>COLLAPSE</span>
+          <span style="--mark: 58%">COSMIC<br>DAWN</span>
+          <span style="--mark: 78%">GALAXY<br>ERA</span>
+          <span style="--mark: 100%">PRESENT<br>MODEL</span>
+        </div>
+      </div>
+      <div class="layer-controls" aria-label="Universe layers">
+        <span>VISIBLE FIELD</span>
+        <div>
+          <button class="layer-button is-active" data-layer="dark" aria-pressed="true">DARK FIELD</button>
+          <button class="layer-button is-active" data-layer="bubbles" aria-pressed="true" title="Iso-density contours; dark matter is not literally bubbles">BUBBLE CONTOURS</button>
+          <button class="layer-button is-active" data-layer="gas" aria-pressed="true">BARYON GAS</button>
+          <button class="layer-button is-active" data-layer="stars" aria-pressed="true">GALAXIES</button>
+          <button class="layer-button is-active" data-layer="halos" aria-pressed="true">HALOS</button>
+          <button class="layer-button is-active" data-layer="attractor" aria-pressed="true">ATTRACTOR GHOST</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <dialog id="science-dialog" class="modal-dialog science-dialog">
+    <div class="dialog-topline">
+      <div><span>INSTRUMENT MANUAL / REALITY CHECK</span><h2>THE LONG CAUSAL BRIDGE</h2></div>
+      <button class="dialog-close icon-button" aria-label="Close science notes">×</button>
+    </div>
+    <div class="science-warning">
+      <b>GENERATIVE COSMOLOGY, NOT A PHYSICAL THEORY.</b>
+      <p>The app joins real mathematical ideas through an invented mapping. A Mandelbrot pixel is a parameter, not a place in space; the attractor is a signal generator, not a force; the glowing “bubbles” are density contours, not literal dark-matter objects.</p>
+    </div>
+    <div class="science-layout">
+      <nav aria-label="Science note sections">
+        <button data-scroll-note="mandelbrot" class="is-active"><i>01</i> Mandelbrot boundary</button>
+        <button data-scroll-note="butterfly"><i>02</i> Butterfly effect</button>
+        <button data-scroll-note="attractor"><i>03</i> Strange attractors</button>
+        <button data-scroll-note="field"><i>04</i> Phase correlation</button>
+        <button data-scroll-note="darkmatter"><i>05</i> Dark web + bubbles</button>
+        <button data-scroll-note="galaxies"><i>06</i> Galaxy emergence</button>
+        <button data-scroll-note="limits"><i>07</i> Where analogy ends</button>
+      </nav>
+      <article class="science-copy">
+        <section id="note-mandelbrot">
+          <span class="note-type measured">MATHEMATICALLY MEASURED</span>
+          <h3>01. A line becomes a fractal spectrum</h3>
+          <p>The left pane evaluates <code>zₙ₊₁ = zₙ² + c</code>. Your line is resampled by arc length, so drawing speed does not change its genome. At each complex value <code>c</code>, the engine records smooth escape time, interior occupancy, orbit-trap distance, boundary crossings, and signal roughness.</p>
+          <p>The boundary contains structure at every visible scale. Sampling across it produces abrupt changes from one nearby parameter to the next. That is parameter sensitivity—not, by itself, the atmospheric “butterfly effect.”</p>
+        </section>
+        <section id="note-butterfly">
+          <span class="note-type measured">CONTROLLED EXPERIMENT</span>
+          <h3>02. A′ differs by ε</h3>
+          <p>Butterfly Twin offsets one resampled complex coordinate by <code>ε = 10⁻⁸</code>. Both branches obey identical code. Their strange-attractor trajectories and phase fields then separate. The displayed score is a visual divergence measure, not a claimed Lyapunov exponent.</p>
+        </section>
+        <section id="note-attractor">
+          <span class="note-type mapped">GENERATIVE MAPPING</span>
+          <h3>03. The actual chaos layer</h3>
+          <p>The fractal genome selects a Lorenz, Rössler, or Clifford regime. These systems are deterministic and bounded, yet can trace non-repeating structure that is highly sensitive to initial conditions. The animated transfer loom is a projection of that trajectory.</p>
+          <pre>LORENZ
+dx/dt = σ(y − x)
+dy/dt = x(ρ − z) − y
+dz/dt = xy − βz</pre>
+        </section>
+        <section id="note-field">
+          <span class="note-type analogy">PHYSICS-INSPIRED ANALOGY</span>
+          <h3>04. Correlated phase voices</h3>
+          <p>The attractor supplies deterministic phases for a multi-scale procedural density field. In a Butterfly Twin, the Phase Link dial preserves some large-scale modes while allowing small-scale structure to differ. The retained similarity is classical phase correlation—an “entanglement” metaphor, never quantum entanglement.</p>
+          <p>This is where multiple lines become interesting: a woven bundle contributes several phase voices, so its large forms emerge from interference rather than from one seed alone.</p>
+        </section>
+        <section id="note-darkmatter">
+          <span class="note-type analogy">PHYSICS-INSPIRED ANALOGY</span>
+          <h3>05. Invisible scaffolding becomes visible</h3>
+          <p>The shader grows a CDM-shaped toy field from broad basins into sheets, filaments, and knots. Cool blue structure represents dark-matter-like density. Violet bubble rims are nested iso-density and potential contours—an interface for seeing a continuous field, not a proposal that dark matter is made of bubbles.</p>
+          <p>Real cold dark matter evolves in three dimensions under gravity and cosmic expansion. This instrument uses a fast 2D procedural displacement that borrows the visual logic of the Zel’dovich approximation.</p>
+        </section>
+        <section id="note-galaxies">
+          <span class="note-type emergent">EMERGENT OUTPUT</span>
+          <h3>06. Nothing places a galaxy by hand</h3>
+          <p>Galaxy proxies are sampled from the attractor-warped density knots. Age, density, cooling, turbulence, spin, and feedback determine which halos light up, when they are born, and whether they read as dwarfs, ellipticals, or spirals. The hierarchy is emergent inside this model: field → filament → halo → light.</p>
+          <p>The violet → cyan → amber → white scale is an order or “negentropy” proxy: it tracks coherent, collapsed organization relative to the initial procedural field. It is not negative thermodynamic entropy; the simulated system has no complete heat or information accounting.</p>
+          <p>Real galaxies additionally require gas hydrodynamics, radiative cooling, star formation, black holes, mergers, chemistry, and feedback across immense ranges of scale. Here they are luminous summaries of collapsed regions.</p>
+        </section>
+        <section id="note-limits">
+          <span class="note-type warning">BOUNDARY OF THE CLAIM</span>
+          <h3>07. What the app can honestly teach</h3>
+          <p>Simple deterministic rules can create multiscale structure. Nearby initial conditions can diverge. Hidden fields can organize visible matter. Macroscopic form can emerge without a designer placing every part. Those are real shared ideas.</p>
+          <p>The app does not demonstrate that the Mandelbrot set caused cosmology, that dark matter is chaotic, that universes are quantum-entangled, or that this is a precision N-body simulation. It is an instrument for intuition and art.</p>
+        </section>
+      </article>
+    </div>
+  </dialog>
+
+  <dialog id="gpu-dialog" class="modal-dialog gpu-dialog">
+    <div class="dialog-topline">
+      <div><span>RENDER DIAGNOSTICS</span><h2 id="gpu-dialog-title">GRAPHICS PIPELINE</h2></div>
+      <button class="dialog-close icon-button" aria-label="Close diagnostics">×</button>
+    </div>
+    <div class="gpu-summary" id="gpu-summary"><span></span><div><b>INSPECTING RENDERER</b><p>The universe engine is querying Chromium and WebGL.</p></div></div>
+    <dl class="diagnostic-grid" id="diagnostic-grid"></dl>
+    <div class="dialog-actions"><button id="copy-diagnostics">COPY DIAGNOSTICS</button><button class="dialog-close accent-button">DONE</button></div>
+  </dialog>
+
+  <dialog id="help-dialog" class="modal-dialog help-dialog">
+    <div class="dialog-topline">
+      <div><span>THREE MOVES</span><h2>HOW TO GROW A UNIVERSE</h2></div>
+      <button class="dialog-close icon-button" aria-label="Close help">×</button>
+    </div>
+    <ol>
+      <li><i>01</i><div><b>ZOOM TOWARD THE LIGHT</b><p>Scroll over the Mandelbrot pane. The bright frontier is where the richest genome signals live.</p></div></li>
+      <li><i>02</i><div><b>DRAW THROUGH IT</b><p>Drag a line across the boundary. Branch mode ignites on release; Weave mode lets several strands interfere.</p></div></li>
+      <li><i>03</i><div><b>LET STRUCTURE EMERGE</b><p>Play model time. Watch density collect into contours, filaments, halo knots, and luminous galaxies.</p></div></li>
+    </ol>
+    <div class="shortcut-grid">
+      <span><kbd>D</kbd> draw</span><span><kbd>H</kbd> pan</span><span><kbd>P</kbd> probe</span><span><kbd>B</kbd> butterfly twin</span><span><kbd>N</kbd> new genome</span><span><kbd>SPACE</kbd> play / pause</span>
+    </div>
+  </dialog>
+
+  <dialog id="license-dialog" class="modal-dialog license-dialog">
+    <div class="dialog-topline">
+      <div><span>OPEN-SOURCE CREDITS</span><h2>BUILT IN THE OPEN</h2></div>
+      <button class="dialog-close icon-button" aria-label="Close open-source credits">×</button>
+    </div>
+    <div class="license-copy">
+      <p><b>Butterfly FX — Universe Loom</b> is released under the <strong>MIT License</strong>. You may use, study, modify, and redistribute the project under those terms.</p>
+      <ul>
+        <li><div><b>p5.js 1.11.13</b><span>Creative-coding runtime · GNU LGPL-2.1</span></div><a href="https://github.com/processing/p5.js" target="_blank" rel="noreferrer">SOURCE ↗</a></li>
+        <li><div><b>Electron 43.4.0</b><span>Desktop Chromium shell · MIT</span></div><a href="https://github.com/electron/electron" target="_blank" rel="noreferrer">SOURCE ↗</a></li>
+        <li><div><b>electron-builder 26.15.3</b><span>Desktop packaging toolchain · MIT</span></div><a href="https://github.com/electron-userland/electron-builder" target="_blank" rel="noreferrer">SOURCE ↗</a></li>
+      </ul>
+      <p class="license-note">p5.js is copied unmodified into the offline/Pages build. Full notices and license texts ship with the source repository and desktop bundle. None of these projects endorse this simulation.</p>
+    </div>
+  </dialog>
+
+  <dialog id="screensaver-dialog" class="modal-dialog screensaver-dialog">
+    <div class="dialog-topline">
+      <div><span>AUTOGEN / DISPLAY MODE</span><h2>LET THE LOOM DREAM</h2></div>
+      <button class="dialog-close icon-button" aria-label="Close screensaver setup">×</button>
+    </div>
+    <div class="screensaver-copy">
+      <p>The instrument will draw new deterministic genomes, evolve their universes, and continue until you press Escape. Every generated branch remains in the archive.</p>
+      <span class="screen-option-label">FULLSCREEN COMPOSITION</span>
+      <div class="screen-view-options" role="group" aria-label="Screensaver composition">
+        <button class="screen-view-option is-active" data-screen-view="both" aria-pressed="true"><i>◫</i><b>BOTH</b><span>cause + consequence</span></button>
+        <button class="screen-view-option" data-screen-view="universe" aria-pressed="false"><i>✦</i><b>UNIVERSE</b><span>full cosmic field</span></button>
+        <button class="screen-view-option" data-screen-view="mandelbrot" aria-pressed="false"><i>⌁</i><b>MANDELBROT</b><span>fractal + live genome</span></button>
+      </div>
+      <label class="range-control screensaver-interval-control">
+        <span><b>NEW UNIVERSE INTERVAL</b><output id="screensaver-interval-value">24 seconds</output></span>
+        <input id="screensaver-interval" type="range" min="10" max="90" step="2" value="24">
+      </label>
+      <div class="screensaver-notice"><i></i><span>Fullscreen uses the active WebGL renderer. Safe Preview remains available when hardware acceleration is unavailable.</span></div>
+    </div>
+    <div class="dialog-actions"><button class="dialog-close">CANCEL</button><button class="accent-button" id="start-screensaver">START AUTOGEN ⛶</button></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="sr-only" id="live-region" aria-live="polite"></div>
+
+  <script src="./vendor/p5.min.js"></script>
+  <script src="./simulation.js"></script>
+  <script src="./shaders.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
