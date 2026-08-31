@@ -1722,9 +1722,11 @@
     const view = cameraView();
     const span = MathX.cosmicFitSpan(aspect) * view.scale;
     const zoom = 1 / Math.max(COSMOS_MIN_SCALE, view.scale);
-    const budgetStride = state.fps && state.fps < 30 && zoom < 5 ? 2 : 1;
     const markers = [];
-    for (let index = 0; index < universe.galaxies.length; index += budgetStride) {
+    // Keep galaxy membership stable from frame to frame. A frame-rate-dependent
+    // stride created a feedback loop around 30 FPS: half the galaxies vanished,
+    // FPS recovered, then they returned and pushed FPS back down again.
+    for (let index = 0; index < universe.galaxies.length; index += 1) {
       const galaxy = universe.galaxies[index];
       if (state.age < galaxy.birth) continue;
       const screen = MathX.cosmicFieldToScreen(galaxy.x, galaxy.y, view, aspect);
@@ -2183,8 +2185,8 @@
     badge.classList.remove('is-checking', 'is-hardware', 'is-software', 'is-error');
     badge.classList.add(state.shaderError ? 'is-error' : (hardware ? 'is-hardware' : 'is-software'));
     $('#gpu-label').textContent = state.shaderError
-      ? 'GPU · SHADER ERROR'
-      : (hardware ? `GPU · ${state.webgl2 ? 'WEBGL2' : 'WEBGL1'}` : 'SAFE PREVIEW · SOFTWARE');
+      ? 'OPTICS · INTERRUPTED'
+      : (hardware ? `OPTICS · ${state.webgl2 ? 'WEBGL2' : 'WEBGL1'}` : 'OPTICS · SOFTWARE');
     renderDiagnosticDialog();
     if (!hardware) showToast('Safe Preview: a software renderer was detected. Geometry remains deterministic; visual density may be reduced.', 5200);
   }
@@ -2197,11 +2199,11 @@
     summary.classList.toggle('is-hardware', hardware);
     summary.classList.toggle('is-software', !hardware);
     $('b', summary).textContent = shaderError
-      ? 'SHADER INITIALIZATION FAILED'
-      : (hardware ? 'HARDWARE ACCELERATION ACTIVE' : 'SOFTWARE / SAFE PREVIEW');
+      ? 'THE FIELD OPTICS DID NOT IGNITE'
+      : (hardware ? 'GPU LIGHT PATH' : 'SOFTWARE LIGHT PATH');
     $('p', summary).textContent = shaderError || gpuNotice || (hardware
-      ? `${sourceVisual === 'buddhabrot' ? 'Buddhabrot accumulation/display' : 'Mandelbrot fragments'} and the dark-field shaders are executing through WebGL.`
-      : 'The field is running through a fallback renderer. Performance and density may be limited.');
+      ? `${sourceVisual === 'buddhabrot' ? 'Buddhabrot accumulation and display' : 'The Mandelbrot field'} is being resolved directly through WebGL.`
+      : 'The instrument is drawing through its quieter software fallback. Geometry remains deterministic; visual density may be reduced.');
 
     const entries = [
       ['WEBGL CONTEXT', webgl.webglVersion || 'Unavailable'],

@@ -9,45 +9,46 @@
 </head>
 <body>
   <div class="app-shell">
-    <header class="command-bar">
+    <header class="command-bar instrument-masthead">
       <div class="brand-block" aria-label="Butterfly FX Universe Loom">
         <div class="brand-sigil" aria-hidden="true">
           <span></span><span></span><i></i>
         </div>
-        <div>
-          <div class="brand-kicker">BUTTERFLY <b>//</b> FX</div>
-          <h1>UNIVERSE LOOM</h1>
+        <div class="brand-copy">
+          <div class="brand-kicker">BUTTERFLY <b>·</b> FX</div>
+          <h1>Universe Loom</h1>
+          <span class="brand-subtitle">Deterministic cosmogenesis instrument</span>
         </div>
       </div>
 
       <nav class="view-modes" aria-label="Workspace mode">
-        <button class="mode-button is-active" data-view="weave" aria-pressed="true">WEAVE</button>
-        <button class="mode-button" data-view="evolve" aria-pressed="false">EVOLVE</button>
-        <button class="mode-button" data-view="divergence" aria-pressed="false">DIVERGENCE</button>
+        <button class="mode-button is-active" data-view="weave" aria-pressed="true"><span>Weave</span><small>compose</small></button>
+        <button class="mode-button" data-view="evolve" aria-pressed="false"><span>Evolve</span><small>observe</small></button>
+        <button class="mode-button" data-view="divergence" aria-pressed="false"><span>Divergence</span><small>compare ε</small></button>
       </nav>
 
       <div class="command-actions">
         <button class="compact-action" id="focus-view-button" title="Cycle canvas composition">VIEW · BOTH</button>
         <button class="compact-action autogen-action" id="screensaver-button" title="Fullscreen procedural screensaver">AUTOGEN ⛶</button>
-        <span class="model-badge" title="This is a physics-inspired generative analogy">MODEL, NOT THEORY</span>
-        <button class="text-action" id="science-button">SCIENCE NOTES</button>
-        <button class="text-action" id="license-button" aria-label="Open-source licenses and credits" title="Open-source licenses and credits">OPEN SOURCE</button>
+        <span class="model-badge" title="This is a physics-inspired generative analogy">ART / MODEL</span>
+        <button class="text-action" id="science-button">Science notes</button>
+        <button class="text-action" id="license-button" aria-label="Open-source licenses and credits" title="Open-source licenses and credits">Open source</button>
         <button class="gpu-badge is-checking" id="gpu-button" aria-haspopup="dialog">
           <span class="gpu-light"></span>
-          <span id="gpu-label">GPU · CHECKING</span>
+          <span id="gpu-label">OPTICS · WARMING</span>
           <span id="fps-label">-- FPS</span>
         </button>
       </div>
     </header>
 
-    <main class="main-workspace">
-      <aside class="control-deck" aria-label="Universe controls">
-        <section class="deck-section creation-section">
+    <main class="main-workspace instrument-grid">
+      <aside class="control-deck editorial-rail rail-input" aria-label="Universe controls">
+        <section class="deck-section creation-section chapter">
           <div class="section-heading">
-            <span>01 / CAUSAL INPUT</span>
+            <span><i>01</i> Compose a genome</span>
             <button class="icon-button" id="help-button" title="How to use Universe Loom" aria-label="How to use Universe Loom">?</button>
           </div>
-          <p class="instruction" id="source-instruction">Drag through the luminous boundary. The path becomes a deterministic cosmic genome.</p>
+          <p class="instruction" id="source-instruction">Trace the luminous boundary. Your gesture becomes a deterministic cosmic genome.</p>
 
           <div class="source-visual-switch" role="group" aria-label="Complex-plane source visualization">
             <span>SOURCE IMAGE</span>
@@ -87,8 +88,8 @@
           </div>
         </section>
 
-        <section class="deck-section genome-section">
-          <div class="section-heading"><span>02 / LIVE GENOME</span><span id="sample-count">0 SAMPLES</span></div>
+        <section class="deck-section genome-section chapter">
+          <div class="section-heading"><span><i>02</i> Read the signal</span><span id="sample-count">0 SAMPLES</span></div>
           <div class="gene-list" id="gene-list">
             <div class="gene-row" data-gene="density"><i></i><span>DENSITY</span><div><b></b></div><output>—</output></div>
             <div class="gene-row" data-gene="turbulence"><i></i><span>TURBULENCE</span><div><b></b></div><output>—</output></div>
@@ -102,8 +103,8 @@
           </div>
         </section>
 
-        <section class="deck-section model-section">
-          <div class="section-heading"><span>03 / MODEL DIALS</span><span>GPU UNIFORMS</span></div>
+        <section class="deck-section model-section chapter">
+          <div class="section-heading"><span><i>03</i> Calibrate the model</span><span>GPU UNIFORMS</span></div>
           <label class="range-control">
             <span><b>ITERATION DEPTH</b><output id="iteration-value">180</output></span>
             <input id="iteration-control" type="range" min="60" max="260" step="10" value="180">
@@ -123,7 +124,7 @@
         </section>
       </aside>
 
-      <section class="instrument-stage" id="instrument-stage" aria-label="Interactive complex-source and universe canvas">
+      <section class="instrument-stage figure-plate" id="instrument-stage" aria-label="Interactive complex-source and universe canvas">
         <div id="canvas-host" tabindex="0" role="application" aria-describedby="canvas-instructions"></div>
         <p class="sr-only" id="canvas-instructions">Choose a Mandelbrot escape map or Buddhabrot orbit-density map for the source pane. Drag on the source pane to create a universe. Scroll over it to magnify complex parameter space. Scroll over the universe pane to magnify its structure, and drag there to roam. Press plus or minus to change universe magnification and zero to frame the full universe.</p>
 
@@ -215,10 +216,10 @@
         </div>
       </section>
 
-      <aside class="archive-deck" aria-label="Multiverse archive">
+      <aside class="archive-deck editorial-rail rail-archive" aria-label="Multiverse archive">
         <section class="archive-header">
           <div>
-            <span>MULTIVERSE ARCHIVE</span>
+            <span>Branch archive</span>
             <b id="universe-count">00 UNIVERSES</b>
           </div>
           <button class="icon-button" id="clear-archive" title="Clear archive" aria-label="Clear universe archive">⌫</button>
@@ -232,7 +233,7 @@
           </div>
         </div>
 
-        <section class="selected-universe" id="selected-universe" hidden>
+        <section class="selected-universe specimen-sheet" id="selected-universe" hidden>
           <div class="selected-title">
             <div><span>SELECTED BRANCH</span><h2 id="selected-name">Universe —</h2></div>
             <button id="rename-universe" class="icon-button" title="Rename universe">✎</button>
@@ -256,8 +257,8 @@
           </div>
         </section>
 
-        <section class="causal-pipeline">
-          <div class="section-heading"><span>CAUSAL PIPELINE</span><span>INSPECT</span></div>
+        <section class="causal-pipeline method-index">
+          <div class="section-heading"><span>Causal method</span><span>INSPECT</span></div>
           <button data-note="mandelbrot"><i>01</i><b>FRACTAL / ORBIT SOURCE</b><span>c → escape signal</span></button>
           <button data-note="attractor"><i>02</i><b>STRANGE ATTRACTOR</b><span>signal → bounded chaos</span></button>
           <button data-note="field"><i>03</i><b>PHASE FIELD</b><span>flow → correlated modes</span></button>
@@ -267,7 +268,7 @@
       </aside>
     </main>
 
-    <footer class="epoch-deck">
+    <footer class="epoch-deck time-ribbon">
       <button class="play-button" id="play-button" aria-label="Play cosmic evolution" aria-pressed="false"><span></span></button>
       <div class="epoch-track">
         <div class="epoch-heading">
@@ -376,10 +377,10 @@ dz/dt = xy − βz</pre>
 
   <dialog id="gpu-dialog" class="modal-dialog gpu-dialog" aria-labelledby="gpu-dialog-title">
     <div class="dialog-topline">
-      <div><span>RENDER DIAGNOSTICS</span><h2 id="gpu-dialog-title">GRAPHICS PIPELINE</h2></div>
+      <div><span>LIGHT PATH</span><h2 id="gpu-dialog-title">Field Optics</h2></div>
       <button class="dialog-close icon-button" aria-label="Close diagnostics">×</button>
     </div>
-    <div class="gpu-summary" id="gpu-summary"><span></span><div><b>INSPECTING RENDERER</b><p>The universe engine is querying Chromium and WebGL.</p></div></div>
+    <div class="gpu-summary" id="gpu-summary"><span></span><div><b>READING THE LIGHT PATH</b><p>The instrument is tracing how this universe becomes light.</p></div></div>
     <dl class="diagnostic-grid" id="diagnostic-grid"></dl>
     <div class="dialog-actions"><button id="copy-diagnostics">COPY DIAGNOSTICS</button><button class="dialog-close accent-button">DONE</button></div>
   </dialog>

@@ -74,6 +74,14 @@ app.whenReady().then(async () => {
   await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics?.renderOnce()`);
   await new Promise((resolve) => setTimeout(resolve, 250));
 
+  const beforeDraw = await window.webContents.executeJavaScript(`(() => {
+    const status = window.ButterflyFXDiagnostics?.status();
+    return {
+      universeCount: status?.universeCount || 0,
+      renderRevision: status?.renderRevision || 0
+    };
+  })()`);
+
   const canvasBounds = await window.webContents.executeJavaScript(`(() => {
     const rect = document.querySelector('canvas').getBoundingClientRect();
     return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -139,6 +147,10 @@ app.whenReady().then(async () => {
   expect(report.canvasCount === 1, 'exactly one p5 canvas should exist');
   expect(report.engine?.sourceVisual === 'mandelbrot', 'Mandelbrot should be the default source microscope');
   expect(report.engine?.universeCount >= 1 || !gpuSmoke, 'draw gesture should create a universe in GPU mode');
+  expect(!gpuSmoke || report.engine?.universeCount === beforeDraw.universeCount + 1,
+    'one completed draw gesture should create exactly one universe');
+  expect(!gpuSmoke || report.engine?.renderRevision === beforeDraw.renderRevision + 1,
+    'one completed draw gesture should select exactly one new render revision');
   expect(!report.engine?.shaderError, 'shader initialization should complete without an error');
   const canvasDataUrl = await window.webContents.executeJavaScript(`document.querySelector('canvas')?.toDataURL('image/png') || null`);
   if (canvasDataUrl) {
