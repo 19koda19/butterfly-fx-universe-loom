@@ -83,6 +83,34 @@ test('stroke resampling preserves endpoints and requested count', () => {
   assert.equal(resampled.at(-1).cy, points.at(-1).cy);
 });
 
+test('reciprocal strands are deterministic, complementary counterfactuals', () => {
+  const source = [
+    makeStrand(),
+    { ...makeStrand(0.07), role: 'DENSITY' }
+  ];
+  const snapshot = structuredClone(source);
+  const first = Cosmo.makeReciprocalStrands(source);
+  const second = Cosmo.makeReciprocalStrands(source);
+
+  assert.deepEqual(first, second);
+  assert.deepEqual(source, snapshot, 'reciprocal construction must not mutate archived strands');
+  assert.equal(first.length, source.length);
+  assert.equal(first[0].role, 'AUTO');
+  assert.equal(first[1].role, 'VOID');
+  first.forEach((strand, strandIndex) => {
+    assert.equal(strand.points.length, source[strandIndex].points.length);
+    strand.points.forEach((point) => {
+      assert.ok(Number.isFinite(point.cx) && Number.isFinite(point.cy));
+      assertUnitInterval(point.x, 'reciprocal point.x');
+      assertUnitInterval(point.y, 'reciprocal point.y');
+    });
+  });
+
+  const original = Cosmo.makeUniverse(source, 'U-ORIGINAL', { createdAt: 'fixed' });
+  const reciprocal = Cosmo.makeUniverse(first, 'U-RECIPROCAL', { createdAt: 'fixed' });
+  assert.notEqual(reciprocal.genome.seedHex, original.genome.seedHex);
+});
+
 test('identical paths compile to identical genomes and galaxies', () => {
   const first = Cosmo.makeUniverse([makeStrand()], 'U-A', { createdAt: 'fixed' });
   const second = Cosmo.makeUniverse([makeStrand()], 'U-B', { createdAt: 'fixed' });

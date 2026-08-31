@@ -125,6 +125,7 @@ app.whenReady().then(async () => {
   const buddhabrotScreenshotPath = path.join('/tmp', 'butterfly-fx-buddhabrot.png');
   const zoomScreenshotPath = path.join('/tmp', 'butterfly-fx-universe-zoom.png');
   const screensaverScreenshotPath = path.join('/tmp', 'butterfly-fx-screensaver.png');
+  const reciprocityScreenshotPath = path.join('/tmp', 'butterfly-fx-reciprocity.png');
   let buddhabrotReport = null;
   let mandelbrotCinematicReport = null;
   let annularReport = null;
@@ -134,6 +135,7 @@ app.whenReady().then(async () => {
   let wheelReport = null;
   let panReport = null;
   let cameraPersistenceReport = null;
+  let reciprocityReport = null;
   expect(report.canvasCount === 1, 'exactly one p5 canvas should exist');
   expect(report.engine?.sourceVisual === 'mandelbrot', 'Mandelbrot should be the default source microscope');
   expect(report.engine?.universeCount >= 1 || !gpuSmoke, 'draw gesture should create a universe in GPU mode');
@@ -394,6 +396,62 @@ app.whenReady().then(async () => {
       errors.add(`Full-window capture failed: ${error.message}`);
     }
   }
+
+  try {
+    const beforeReciprocity = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(() => {
+      document.querySelector('#screensaver-button').click();
+      document.querySelector('[data-screen-view="universe"]').click();
+      document.querySelector('#start-screensaver').click();
+    })()`);
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+    const afterSingleBirth = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (const key of 'goldenrule') {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 32));
+      }
+    })()`);
+    await new Promise((resolve) => setTimeout(resolve, 1650));
+    reciprocityReport = await window.webContents.executeJavaScript(`(() => {
+      const engine = window.ButterflyFXDiagnostics.status();
+      const signal = document.querySelector('#reciprocity-signal');
+      return {
+        ...engine,
+        selectedSeed: document.querySelector('#hud-seed')?.textContent,
+        signalVisible: Boolean(signal && !signal.hidden),
+        signalPair: document.querySelector('#reciprocity-pair')?.textContent,
+        hudGolden: document.querySelector('#screensaver-hud')?.classList.contains('is-golden'),
+        bodyGolden: document.body.classList.contains('golden-rule-mode'),
+        statusText: document.querySelector('#screensaver-status')?.textContent
+      };
+    })()`);
+    expect(afterSingleBirth.screensaverGenerationCount - beforeReciprocity.screensaverGenerationCount === 1,
+      'Autogen startup should perform exactly one initial generation');
+    expect(reciprocityReport.goldenRuleActive, 'typing goldenrule during Autogen should engage the reciprocity field');
+    expect(reciprocityReport.reciprocalSeed && reciprocityReport.reciprocalSeed !== reciprocityReport.selectedSeed,
+      'the reciprocity field should expose a deterministic counterfactual');
+    expect(reciprocityReport.signalVisible && reciprocityReport.hudGolden && reciprocityReport.bodyGolden,
+      'the reciprocity field should expose its secret visual state');
+    expect(/RECIPROCITY/i.test(reciprocityReport.statusText || ''), 'the Autogen HUD should identify reciprocity while it is active');
+    if (gpuSmoke) {
+      const reciprocityImage = await window.webContents.capturePage();
+      await fs.writeFile(reciprocityScreenshotPath, reciprocityImage.toPNG());
+    }
+    await window.webContents.executeJavaScript(`(async () => {
+      for (const key of 'goldenrule') {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 18));
+      }
+    })()`);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const toggledOff = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status().goldenRuleActive`);
+    expect(!toggledOff, 'typing goldenrule again should release the reciprocity field');
+    await window.webContents.executeJavaScript(`document.querySelector('#screensaver-exit').click()`);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  } catch (error) {
+    errors.add(`Reciprocity smoke failed: ${error.message}`);
+  }
   const reportPath = path.join('/tmp', 'butterfly-fx-smoke-report.json');
   const payload = {
     report,
@@ -404,6 +462,7 @@ app.whenReady().then(async () => {
     wheelReport,
     panReport,
     screensaverReport,
+    reciprocityReport,
     cameraPersistenceReport,
     compositionReport,
     errors: [...errors],
@@ -413,6 +472,7 @@ app.whenReady().then(async () => {
     buddhabrotScreenshotPath,
     zoomScreenshotPath,
     screensaverScreenshotPath,
+    reciprocityScreenshotPath,
     reportPath
   };
   await fs.writeFile(reportPath, JSON.stringify(payload, null, 2));

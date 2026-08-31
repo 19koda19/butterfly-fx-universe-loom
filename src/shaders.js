@@ -121,7 +121,10 @@
     uniform float uPixelWorld;
     uniform vec4 uSeed;
     uniform vec4 uSharedSeed;
+    uniform vec4 uReciprocalSeed;
     uniform float uCorrelation;
+    uniform float uGoldenRule;
+    uniform float uGoldenPhase;
     uniform float uDensity;
     uniform float uTurbulence;
     uniform float uSpin;
@@ -216,7 +219,8 @@
 
     void main() {
       vec2 screenUv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);
-      vec2 p = (uViewCenter - 0.5) + (screenUv - 0.5) * vec2(uViewScale * uAspect, uViewScale);
+      vec2 screenP = (uViewCenter - 0.5) + (screenUv - 0.5) * vec2(uViewScale * uAspect, uViewScale);
+      vec2 p = screenP;
       vec2 uv = p + 0.5;
       float growth = smoothstep(0.02, 0.88, uAge);
       float dawn = smoothstep(0.18, 0.72, uAge);
@@ -232,8 +236,22 @@
 
       float localLarge = seedField(p * 2.15, uSeed);
       float sharedLarge = seedField(p * 2.15, uSharedSeed);
+      float reciprocalLarge = localLarge;
+      if (uGoldenRule > 0.001) {
+        reciprocalLarge = seedField(rotate2d(2.39996323) * (-p) * 2.15, uReciprocalSeed.wzyx);
+      }
       float largeScale = mix(localLarge, sharedLarge, uCorrelation * 0.82);
       float smallScale = seedField(p * (5.2 + uTurbulence * 4.3), uSeed.zwxy);
+      if (uGoldenRule > 0.001) {
+        float reciprocalSmall = seedField(
+          rotate2d(-2.39996323) * p * (5.2 + uTurbulence * 4.3),
+          uReciprocalSeed.yxwz
+        );
+        float mutualField = clamp((localLarge + reciprocalLarge) * 0.5
+          + (1.0 - abs(localLarge - reciprocalLarge)) * 0.14, 0.0, 1.0);
+        largeScale = mix(largeScale, mutualField, uGoldenRule * 0.72);
+        smallScale = mix(smallScale, reciprocalSmall, uGoldenRule * 0.42);
+      }
       float ridge = 1.0 - abs(2.0 * (largeScale * 0.68 + smallScale * 0.32) - 1.0);
       ridge = pow(clamp(ridge, 0.0, 1.0), 3.2 - uFilamentGain * 0.8);
       float cellular = 1.0 - smoothstep(0.025, 0.24, voronoiEdge(p * (5.0 + uDensity * 3.0), uSeed));
@@ -310,6 +328,37 @@
         * smoothstep(0.28, 0.78, nanoRidge + subFilaments * 0.6);
       color += mix(vec3(0.56, 0.78, 1.0), vec3(1.0, 0.78, 0.5), hash21(stellarCell + 31.0))
         * resolvedStars * (1.6 + 2.8 * hash21(stellarCell + 101.0));
+
+      if (uGoldenRule > 0.001) {
+        vec2 portal = screenUv - 0.5;
+        portal.x *= uAspect;
+        float portalRadius = max(0.0001, length(portal));
+        float portalAngle = atan(portal.y, portal.x);
+        float spiralCarrier = 0.5 + 0.5 * cos(
+          portalAngle * 5.0 - log(portalRadius) * 7.4 + uGoldenPhase * 0.34
+        );
+        float spiral = pow(spiralCarrier, 24.0)
+          * smoothstep(0.018, 0.055, portalRadius)
+          * (1.0 - smoothstep(0.12, 0.54, portalRadius));
+        float phiBloom = 0.0;
+        for (int i = 0; i < 34; i++) {
+          float fi = (float(i) + 0.5) / 34.0;
+          float nodeAngle = float(i) * 2.39996323 + uGoldenPhase * 0.075;
+          float nodeRadius = sqrt(fi) * 0.43;
+          vec2 node = vec2(cos(nodeAngle), sin(nodeAngle)) * nodeRadius;
+          float nodeSize = mix(0.0048, 0.0022, fi);
+          float nodeDistance = length(portal - node);
+          phiBloom += exp(-(nodeDistance * nodeDistance) / (nodeSize * nodeSize));
+        }
+        float reciprocalAgreement = pow(clamp(1.0 - abs(localLarge - reciprocalLarge), 0.0, 1.0), 5.0);
+        float breathingRing = exp(-abs(portalRadius - (0.19 + sin(uGoldenPhase / 1.618) * 0.025)) * 92.0);
+        float iris = 1.0 - smoothstep(0.0, 0.055, portalRadius);
+        vec3 reciprocalGold = mix(vec3(0.72, 0.31, 0.055), vec3(1.0, 0.91, 0.48), reciprocalAgreement);
+        color = mix(color, color * vec3(1.2, 0.96, 0.72) + reciprocalGold * reciprocalAgreement * 0.13,
+          uGoldenRule * 0.34);
+        color += reciprocalGold * (spiral * 0.46 + min(phiBloom, 2.4) * 0.34
+          + breathingRing * 0.16 + iris * 0.22) * uGoldenRule;
+      }
 
       float attractorGhost = abs(sin((p.x * 11.0 + p.y * 15.0 + largeScale * 6.0) - uTime * 0.12));
       attractorGhost = pow(1.0 - attractorGhost, 18.0) * uAttractorLayer * 0.08;

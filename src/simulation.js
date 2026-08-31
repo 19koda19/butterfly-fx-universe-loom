@@ -6,6 +6,8 @@
   'use strict';
 
   const TAU = Math.PI * 2;
+  const PHI = (1 + Math.sqrt(5)) / 2;
+  const GOLDEN_ANGLE = TAU / (PHI * PHI);
 
   function clamp(value, min = 0, max = 1) {
     return Math.min(max, Math.max(min, value));
@@ -156,6 +158,54 @@
       output.push(sample);
     }
     return output;
+  }
+
+  function makeReciprocalStrands(strands) {
+    const source = Array.isArray(strands) ? strands : [];
+    const allPoints = source.flatMap((strand) => strand.points || strand || [])
+      .filter((point) => Number.isFinite(point?.cx) && Number.isFinite(point?.cy));
+    if (!allPoints.length) return [];
+
+    const center = allPoints.reduce((sum, point) => ({
+      x: sum.x + point.cx / allPoints.length,
+      y: sum.y + point.cy / allPoints.length
+    }), { x: 0, y: 0 });
+    const roleComplements = {
+      DENSITY: 'VOID',
+      VOID: 'DENSITY',
+      TURBULENCE: 'SPIN',
+      SPIN: 'TURBULENCE',
+      AUTO: 'AUTO'
+    };
+
+    return source.map((strand, strandIndex) => {
+      const sourcePoints = (strand.points || strand || []).slice().reverse();
+      const angle = GOLDEN_ANGLE * (strandIndex + 1);
+      const cosine = Math.cos(angle);
+      const sine = Math.sin(angle);
+      const timeValues = sourcePoints.map((point) => point.time).filter(Number.isFinite);
+      const timeStart = timeValues.length ? Math.min(...timeValues) : 0;
+      const timeSpan = timeValues.length ? Math.max(...timeValues) - timeStart : Math.max(1, sourcePoints.length - 1);
+      return {
+        role: roleComplements[strand.role || 'AUTO'] || 'AUTO',
+        operation: strand.operation || 'ADD',
+        points: sourcePoints.map((point, pointIndex) => {
+          const dx = point.cx - center.x;
+          const dy = point.cy - center.y;
+          const reciprocalX = (cosine * dx - sine * dy) / PHI;
+          const reciprocalY = (sine * dx + cosine * dy) / PHI;
+          const normalizedX = Number.isFinite(point.x) ? point.x - 0.5 : 0;
+          const normalizedY = Number.isFinite(point.y) ? point.y - 0.5 : 0;
+          return {
+            x: clamp(0.5 + (cosine * normalizedX - sine * normalizedY) / PHI),
+            y: clamp(0.5 + (sine * normalizedX + cosine * normalizedY) / PHI),
+            cx: center.x + reciprocalX,
+            cy: center.y + reciprocalY,
+            time: timeStart + timeSpan * (pointIndex / Math.max(1, sourcePoints.length - 1))
+          };
+        })
+      };
+    });
   }
 
   function normalizedEntropy(values, bins = 8) {
@@ -794,6 +844,8 @@
 
   return Object.freeze({
     TAU,
+    PHI,
+    GOLDEN_ANGLE,
     clamp,
     lerp,
     fnv1a,
@@ -807,6 +859,7 @@
     zoomCosmicView,
     mandelbrotSample,
     resampleStroke,
+    makeReciprocalStrands,
     analyzeStrands,
     generateAttractor,
     generateGalaxies,
