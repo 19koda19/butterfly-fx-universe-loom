@@ -3897,6 +3897,13 @@ body.golden-rule-mode .universe-stage-label {
   letter-spacing: 0.08em;
 }
 
+.reciprocity-cinematic-label small {
+  color: rgba(218, 224, 231, 0.52);
+  font: 5px/1 var(--mono);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
 .reciprocity-cinematic-divider {
   position: absolute;
   top: 112px;

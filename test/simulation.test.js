@@ -109,6 +109,19 @@ test('reciprocal strands are deterministic, complementary counterfactuals', () =
   const original = Cosmo.makeUniverse(source, 'U-ORIGINAL', { createdAt: 'fixed' });
   const reciprocal = Cosmo.makeUniverse(first, 'U-RECIPROCAL', { createdAt: 'fixed' });
   assert.notEqual(reciprocal.genome.seedHex, original.genome.seedHex);
+  assert.notDeepEqual(reciprocal.genome.metrics, original.genome.metrics,
+    'the reciprocal universe should have its own field metrics');
+  assert.notDeepEqual(reciprocal.genome.genes, original.genome.genes,
+    'the reciprocal universe should have its own cosmological genes');
+  assert.notDeepEqual(reciprocal.galaxies, original.galaxies,
+    'the reciprocal universe should have its own galaxy population');
+  const mutual = Cosmo.makeUniverse([...source, ...first], 'U-MUTUAL', { createdAt: 'fixed' });
+  assert.notEqual(mutual.genome.seedHex, original.genome.seedHex);
+  assert.notEqual(mutual.genome.seedHex, reciprocal.genome.seedHex);
+  assert.notDeepEqual(mutual.genome.metrics, original.genome.metrics,
+    'the mutual universe should compile both initial conditions into new field metrics');
+  assert.notDeepEqual(mutual.galaxies, original.galaxies,
+    'the mutual universe should have its own galaxy population');
 });
 
 test('identical paths compile to identical genomes and galaxies', () => {

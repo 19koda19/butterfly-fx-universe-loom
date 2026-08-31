@@ -100,6 +100,7 @@
     fallbackKey: '',
     renderRevision: 0,
     clearBeforeFrame: false,
+    cosmosFramePasses: [],
     screensaver: {
       active: false,
       view: 'both',
@@ -120,6 +121,7 @@
         previousFocus: null,
         sourceUniverseId: null,
         reciprocal: null,
+        mutual: null,
         transitionStartedAt: 0,
         transitionUniverseId: null,
         transitionPhase: 'idle'
@@ -699,6 +701,7 @@
 
   function goldenRuleStatusText(cinematic) {
     const reciprocal = state.screensaver.goldenRule.reciprocal;
+    const mutual = state.screensaver.goldenRule.mutual;
     const depth = 1 / Math.max(COSMOS_MIN_SCALE, state.cosmosCamera.scale);
     const depthLabel = state.focusView === 'both' ? 'DUAL DEPTH' : 'DEPTH';
     const phaseLabel = {
@@ -707,7 +710,17 @@
       fusion: 'III CONVERGENCE',
       reciprocity: 'MUTUAL FIELD'
     }[cinematic.phase] || 'INITIALIZING';
-    return `φ RECIPROCITY · ${phaseLabel} · ${state.selected?.genome.seedHex || 'AWAITING'} ↔ ${reciprocal?.genome.seedHex || 'AWAITING'} · ${depthLabel} ${depth < 10 ? depth.toFixed(1) : Math.round(depth)}×`;
+    const sourcePair = `${state.selected?.genome.seedHex || 'AWAITING'} ↔ ${reciprocal?.genome.seedHex || 'AWAITING'}`;
+    const fieldSequence = cinematic.fusion > 0 && mutual
+      ? `${sourcePair} → ${mutual.genome.seedHex}`
+      : sourcePair;
+    return `φ RECIPROCITY · ${phaseLabel} · ${fieldSequence} · ${depthLabel} ${depth < 10 ? depth.toFixed(1) : Math.round(depth)}×`;
+  }
+
+  function universeMetricSignature(universe) {
+    const metrics = universe?.genome?.metrics;
+    if (!metrics) return 'D -- · T -- · S --';
+    return `D ${Math.round(metrics.density * 100)} · T ${Math.round(metrics.turbulence * 100)} · S ${Math.round(metrics.spin * 100)}`;
   }
 
   function beginGoldenRuleTransition(universe, reciprocal, now = performance.now()) {
@@ -723,6 +736,10 @@
     const reciprocalLabel = $('#reciprocity-counterpart-seed');
     if (originalLabel) originalLabel.textContent = originalSeed;
     if (reciprocalLabel) reciprocalLabel.textContent = reciprocalSeed;
+    const originalMetrics = $('#reciprocity-original-metrics');
+    const reciprocalMetrics = $('#reciprocity-counterpart-metrics');
+    if (originalMetrics) originalMetrics.textContent = universeMetricSignature(universe);
+    if (reciprocalMetrics) reciprocalMetrics.textContent = universeMetricSignature(reciprocal);
 
     // DOM phase cues should keep time even if a browser throttles the p5 draw
     // loop while entering fullscreen. The timestamp guard retires an older
@@ -766,11 +783,14 @@
         void overlay.offsetWidth;
         overlay.classList.add('is-phase-entering');
       }
+      const mutualDescriptor = goldenRule.mutual
+        ? `${goldenRule.mutual.genome.seedHex} · ${universeMetricSignature(goldenRule.mutual)}`
+        : 'AWAITING MUTUAL FIELD';
       const copy = {
         original: ['I · ORIGINAL FIELD', 'OBSERVE THE INITIAL CONDITION'],
-        comparison: ['II · RECIPROCAL REVEAL', 'LEFT: ORIGINAL · RIGHT: COUNTERFACTUAL'],
-        fusion: ['III · CONVERGENCE', 'DIFFERENCE RESOLVES INTO A MUTUAL FIELD'],
-        reciprocity: ['φ · RECIPROCITY', 'AGREEMENT GLOWS · DIFFERENCE REMAINS']
+        comparison: ['II · RECIPROCAL REVEAL', 'COMPARE VOIDS · FILAMENTS · GALAXY SYSTEMS'],
+        fusion: ['III · CONVERGENCE', `MUTUAL FIELD ${mutualDescriptor}`],
+        reciprocity: ['φ · RECIPROCITY', `MUTUAL FIELD ${mutualDescriptor}`]
       }[cinematic.phase];
       if (copy) {
         $('#reciprocity-phase').textContent = copy[0];
@@ -786,9 +806,12 @@
     if (!goldenRule.active || !universe) {
       goldenRule.sourceUniverseId = null;
       goldenRule.reciprocal = null;
+      goldenRule.mutual = null;
       return null;
     }
-    if (goldenRule.sourceUniverseId === universe.id && goldenRule.reciprocal) return goldenRule.reciprocal;
+    if (goldenRule.sourceUniverseId === universe.id && goldenRule.reciprocal && goldenRule.mutual) {
+      return goldenRule.reciprocal;
+    }
 
     const strands = MathX.makeReciprocalStrands(universe.strands);
     let reciprocal = MathX.makeUniverse(strands, `${universe.id}-PHI`, {
@@ -810,8 +833,29 @@
         galaxyLimit: 89
       });
     }
+    const mutualStrands = [...universe.strands, ...reciprocal.strands];
+    let mutual = MathX.makeUniverse(mutualStrands, `${universe.id}-PHI-MUTUAL`, {
+      createdAt: 'reciprocity-mutual-field',
+      parentId: universe.id,
+      name: `Mutual ${universe.genome.seedHex} ${reciprocal.genome.seedHex}`,
+      maxIterations: state.iterations,
+      attractorCount: 720,
+      galaxyLimit: 144
+    });
+    if (mutual.genome.seed === universe.genome.seed || mutual.genome.seed === reciprocal.genome.seed) {
+      mutual = MathX.makeUniverse(mutualStrands, `${universe.id}-PHI-MUTUAL`, {
+        createdAt: 'reciprocity-mutual-field',
+        parentId: universe.id,
+        name: `Mutual ${universe.genome.seedHex} ${reciprocal.genome.seedHex}`,
+        maxIterations: state.iterations,
+        perturbation: -1e-9 / PHI,
+        attractorCount: 720,
+        galaxyLimit: 144
+      });
+    }
     goldenRule.sourceUniverseId = universe.id;
     goldenRule.reciprocal = reciprocal;
+    goldenRule.mutual = mutual;
     const pair = $('#reciprocity-pair');
     if (pair) pair.textContent = `${universe.genome.seedHex} ↔ ${reciprocal.genome.seedHex}`;
     beginGoldenRuleTransition(universe, reciprocal);
@@ -846,6 +890,7 @@
       goldenRule.previousFocus = null;
       goldenRule.sourceUniverseId = null;
       goldenRule.reciprocal = null;
+      goldenRule.mutual = null;
       goldenRule.transitionStartedAt = 0;
       goldenRule.transitionUniverseId = null;
       goldenRule.transitionPhase = 'idle';
@@ -1443,13 +1488,11 @@
     ];
   }
 
-  function cosmosUniforms(universe, sharedUniverse, correlation) {
+  function cosmosUniforms(universe, sharedUniverse, correlation, renderOptions = {}) {
     const { genome } = universe;
-    const goldenRule = state.screensaver.goldenRule;
-    const reciprocal = goldenRule.active && goldenRule.sourceUniverseId === universe.id
-      ? goldenRule.reciprocal
-      : null;
-    const cinematic = goldenRuleCinematic();
+    const reciprocal = renderOptions.effect === 'mutual' ? renderOptions.reciprocal : null;
+    const mutualStrength = reciprocal ? MathX.clamp(renderOptions.strength ?? 1) : 0;
+    const goldenPhase = reciprocal ? (renderOptions.elapsed || 0) * 0.001 : 0;
     return {
       uTime: performance.now() * 0.001,
       uAge: state.age,
@@ -1458,10 +1501,10 @@
       uSharedSeed: seedVector((sharedUniverse || universe).genome.seed),
       uReciprocalSeed: seedVector((reciprocal || universe).genome.seed),
       uCorrelation: correlation,
-      uGoldenRule: reciprocal ? cinematic.fusion : 0,
-      uGoldenCompare: reciprocal ? cinematic.compare : 0,
-      uGoldenDivider: reciprocal ? cinematic.divider : 1.04,
-      uGoldenPhase: reciprocal ? cinematic.elapsed * 0.001 : 0,
+      uGoldenRule: mutualStrength,
+      uGoldenCompare: 0,
+      uGoldenDivider: 1.04,
+      uGoldenPhase: goldenPhase,
       uDensity: genome.metrics.density,
       uTurbulence: genome.metrics.turbulence,
       uSpin: genome.metrics.spin,
@@ -1487,10 +1530,21 @@
     const right = Math.min(p.width, Math.ceil(rect.x + rect.w));
     const top = Math.max(0, Math.floor(rect.y));
     const bottom = Math.min(p.height, Math.ceil(rect.y + rect.h));
-    const width = Math.max(1, right - left);
-    const height = Math.max(1, bottom - top);
+    let clipLeft = left;
+    let clipBottom = p.height - bottom;
+    let clipRight = right;
+    let clipTop = p.height - top;
+    if (hadScissor && previous) {
+      clipLeft = Math.max(clipLeft, previous[0]);
+      clipBottom = Math.max(clipBottom, previous[1]);
+      clipRight = Math.min(clipRight, previous[0] + previous[2]);
+      clipTop = Math.min(clipTop, previous[1] + previous[3]);
+    }
+    const width = clipRight - clipLeft;
+    const height = clipTop - clipBottom;
+    if (width <= 0 || height <= 0) return;
     gl.enable(gl.SCISSOR_TEST);
-    gl.scissor(left, p.height - bottom, width, height);
+    gl.scissor(clipLeft, clipBottom, width, height);
     try {
       draw();
     } finally {
@@ -1552,9 +1606,10 @@
     p.pop();
   }
 
-  function renderCosmos(p, universe, rect, sharedUniverse = null, correlation = 0) {
-    if (rect.w < 2 || rect.h < 2) return;
-    const uniforms = cosmosUniforms(universe, sharedUniverse, correlation);
+  function renderCosmos(p, universe, rect, sharedUniverse = null, correlation = 0, renderOptions = {}) {
+    const clipRect = renderOptions.clipRect || rect;
+    if (rect.w < 2 || rect.h < 2 || clipRect.w <= 0 || clipRect.h <= 0) return;
+    const uniforms = cosmosUniforms(universe, sharedUniverse, correlation, renderOptions);
     const aspect = rect.w / Math.max(1, rect.h);
     const span = MathX.cosmicFitSpan(aspect) * state.cosmosCamera.scale;
     uniforms.uAspect = aspect;
@@ -1562,13 +1617,86 @@
     uniforms.uViewScale = span;
     uniforms.uViewZoom = 1 / Math.max(COSMOS_MIN_SCALE, state.cosmosCamera.scale);
     uniforms.uPixelWorld = span / Math.max(1, rect.h);
-    drawShaderRect(p, state.shaders?.cosmos, rect, uniforms);
-    if ((state.layers.stars || state.layers.halos || state.layers.tension) && universe.id !== 'AMBIENT') {
-      withCosmosClip(p, rect, () => drawGalaxies(p, universe, rect));
+    state.cosmosFramePasses.push({
+      universeId: universe.id,
+      proxyUniverseId: universe.id,
+      role: renderOptions.role || 'standard',
+      effect: renderOptions.effect || 'plain',
+      clip: { x: clipRect.x, y: clipRect.y, w: clipRect.w, h: clipRect.h }
+    });
+    withCosmosClip(p, clipRect, () => {
+      drawShaderRect(p, state.shaders?.cosmos, rect, uniforms);
+      if ((state.layers.stars || state.layers.halos || state.layers.tension) && universe.id !== 'AMBIENT') {
+        drawGalaxies(p, universe, rect);
+      }
+    });
+  }
+
+  function renderGoldenRuleCosmos(p, universe, rect) {
+    const goldenRule = state.screensaver.goldenRule;
+    const reciprocal = goldenRule.reciprocal;
+    const mutual = goldenRule.mutual;
+    const isCurrentPair = goldenRule.active
+      && reciprocal
+      && mutual
+      && goldenRule.sourceUniverseId === universe.id;
+    if (!isCurrentPair) {
+      renderCosmos(p, universe, rect);
+      return;
     }
-    if (state.screensaver.goldenRule.active && state.screensaver.goldenRule.sourceUniverseId === universe.id) {
-      withCosmosClip(p, rect, () => drawReciprocityLattice(p, rect));
+
+    const cinematic = goldenRuleCinematic();
+    const renderOriginal = () => renderCosmos(p, universe, rect, null, 0, {
+      role: 'original',
+      effect: 'plain'
+    });
+    const renderReciprocal = (clipRect) => renderCosmos(p, reciprocal, rect, null, 0, {
+      role: 'reciprocal',
+      effect: 'plain',
+      clipRect
+    });
+
+    if (cinematic.phase === 'original') {
+      renderOriginal();
+      return;
     }
+
+    if (cinematic.phase === 'comparison') {
+      renderOriginal();
+      const splitX = rect.x + rect.w * cinematic.divider;
+      renderReciprocal({ x: splitX, y: rect.y, w: rect.x + rect.w - splitX, h: rect.h });
+      return;
+    }
+
+    if (cinematic.phase === 'fusion') {
+      renderOriginal();
+      const splitX = rect.x + rect.w * 0.5;
+      renderReciprocal({ x: splitX, y: rect.y, w: rect.w * 0.5, h: rect.h });
+      const mutualWidth = rect.w * cinematic.fusion;
+      renderCosmos(p, mutual, rect, null, 0, {
+        role: 'mutual',
+        effect: 'mutual',
+        reciprocal,
+        strength: cinematic.fusion,
+        elapsed: cinematic.elapsed,
+        clipRect: {
+          x: rect.x + (rect.w - mutualWidth) * 0.5,
+          y: rect.y,
+          w: mutualWidth,
+          h: rect.h
+        }
+      });
+    } else {
+      renderCosmos(p, mutual, rect, null, 0, {
+        role: 'mutual',
+        effect: 'mutual',
+        reciprocal,
+        strength: 1,
+        elapsed: cinematic.elapsed
+      });
+    }
+
+    withCosmosClip(p, rect, () => drawReciprocityLattice(p, rect));
   }
 
   function drawEllipseArc(p, radius, axisRatio, completeness = 1, startAngle = 0, wobble = 0) {
@@ -2104,6 +2232,7 @@
       return;
     }
     beginIsolatedFrame(p);
+    state.cosmosFramePasses = [];
 
     const selected = state.selected || ambientUniverse;
     const accent = state.selected?.genome.genes.hue || 0.52;
@@ -2121,7 +2250,7 @@
         p.pop();
       }
     } else {
-      renderCosmos(p, selected, state.layout.cosmos);
+      renderGoldenRuleCosmos(p, selected, state.layout.cosmos);
     }
 
     if (state.selected) drawPathSet(p, state.selected.strands, 210);
@@ -2191,32 +2320,43 @@
     });
   }
 
-  function renderSafePreview(p) {
-    state.layout = calculateLayout(p.width, p.height);
-    const { source, loom, cosmos } = state.layout;
-    p.background(3, 5, 12);
-    if (source.w > 1) {
-      const fractal = makeFallbackFractal(p);
-      p.image(fractal, source.x, source.y, source.w, source.h);
-    }
-    p.noStroke();
-    p.fill(5, 9, 21);
-    if (loom.w > 1) p.rect(loom.x, loom.y, loom.w, loom.h);
-    if (cosmos.w > 1) p.rect(cosmos.x, cosmos.y, cosmos.w, cosmos.h);
-
-    const universe = state.selected || ambientUniverse;
+  function drawSafeCosmosUniverse(p, universe, cosmos, renderOptions = {}) {
+    const clipRect = renderOptions.clipRect || cosmos;
+    if (!universe || cosmos.w < 2 || cosmos.h < 2 || clipRect.w <= 0 || clipRect.h <= 0) return;
+    const role = renderOptions.role || 'standard';
     const cosmosAspect = cosmos.w / Math.max(1, cosmos.h);
     const cosmosView = cameraView();
     const cosmosSpan = MathX.cosmicFitSpan(cosmosAspect) * cosmosView.scale;
+    const fieldColor = role === 'reciprocal'
+      ? [244, 185, 95, 46]
+      : (role === 'mutual' ? [255, 218, 130, 52] : [52, 107, 165, 32]);
+    const starColor = role === 'reciprocal'
+      ? [255, 210, 124]
+      : (role === 'mutual' ? [255, 232, 166] : [235, 214, 173]);
+    const haloColor = role === 'original' || role === 'standard' ? [85, 214, 232] : [244, 185, 95];
+
+    state.cosmosFramePasses.push({
+      universeId: universe.id,
+      proxyUniverseId: universe.id,
+      role,
+      effect: renderOptions.effect || 'plain',
+      clip: { x: clipRect.x, y: clipRect.y, w: clipRect.w, h: clipRect.h }
+    });
+
+    p.push();
+    const context = p.drawingContext;
+    context.beginPath();
+    context.rect(clipRect.x, clipRect.y, clipRect.w, clipRect.h);
+    context.clip();
     p.noFill();
-    for (let index = 1; cosmos.w > 1 && index < universe.attractor.length; index += 8) {
+    for (let index = 1; index < universe.attractor.length; index += 8) {
       const a = universe.attractor[index - 1];
       const b = universe.attractor[index];
       const aScreen = MathX.cosmicFieldToScreen(a.x, a.y, cosmosView, cosmosAspect);
       const bScreen = MathX.cosmicFieldToScreen(b.x, b.y, cosmosView, cosmosAspect);
       if (aScreen.x < 0 || aScreen.x > 1 || aScreen.y < 0 || aScreen.y > 1
         || bScreen.x < 0 || bScreen.x > 1 || bScreen.y < 0 || bScreen.y > 1) continue;
-      p.stroke(52, 107, 165, 32);
+      p.stroke(...fieldColor);
       p.line(
         cosmos.x + aScreen.x * cosmos.w,
         cosmos.y + aScreen.y * cosmos.h,
@@ -2224,8 +2364,8 @@
         cosmos.y + bScreen.y * cosmos.h
       );
     }
-    if (state.selected && (state.layers.stars || state.layers.halos || state.layers.tension)) {
-      state.selected.galaxies.forEach((galaxy, index) => {
+    if (universe.id !== 'AMBIENT' && (state.layers.stars || state.layers.halos || state.layers.tension)) {
+      universe.galaxies.forEach((galaxy, index) => {
         if (index % 2 || galaxy.birth > state.age) return;
         const screen = MathX.cosmicFieldToScreen(galaxy.x, galaxy.y, cosmosView, cosmosAspect);
         if (screen.x < 0 || screen.x > 1 || screen.y < 0 || screen.y > 1) return;
@@ -2238,7 +2378,7 @@
           p.translate(x + halo.offsetX * radius * 2.4, y + halo.offsetY * radius * 2.4);
           p.rotate(halo.rotation);
           p.noFill();
-          p.stroke(85, 214, 232, 42);
+          p.stroke(haloColor[0], haloColor[1], haloColor[2], 42);
           p.strokeWeight(0.7);
           p.ellipse(0, 0, radius * halo.radiusScale * 2, radius * halo.radiusScale * 2 * halo.axisRatio);
           p.pop();
@@ -2249,7 +2389,7 @@
             p.translate(x, y);
             p.rotate(galaxy.morphology.planeAngle);
             p.noFill();
-            p.stroke(132, 218, 250, 175);
+            p.stroke(starColor[0], starColor[1], starColor[2], 175);
             p.strokeWeight(Math.max(1, Math.min(4, radius * galaxy.morphology.ringWidth)));
             p.ellipse(
               0,
@@ -2259,7 +2399,7 @@
             );
             p.pop();
           } else {
-            p.stroke(235, 214, 173, 130);
+            p.stroke(starColor[0], starColor[1], starColor[2], 130);
             p.strokeWeight(Math.max(1, Math.min(6, radius * 0.65)));
             p.point(x, y);
           }
@@ -2272,12 +2412,64 @@
         }
       });
     }
-    if (state.screensaver.goldenRule.active && state.screensaver.goldenRule.sourceUniverseId === universe.id) {
+    p.pop();
+  }
+
+  function renderSafePreview(p) {
+    state.layout = calculateLayout(p.width, p.height);
+    state.cosmosFramePasses = [];
+    const { source, loom, cosmos } = state.layout;
+    p.background(3, 5, 12);
+    if (source.w > 1) {
+      const fractal = makeFallbackFractal(p);
+      p.image(fractal, source.x, source.y, source.w, source.h);
+    }
+    p.noStroke();
+    p.fill(5, 9, 21);
+    if (loom.w > 1) p.rect(loom.x, loom.y, loom.w, loom.h);
+    if (cosmos.w > 1) p.rect(cosmos.x, cosmos.y, cosmos.w, cosmos.h);
+
+    const universe = state.selected || ambientUniverse;
+    const goldenRule = state.screensaver.goldenRule;
+    const reciprocal = goldenRule.reciprocal;
+    const mutual = goldenRule.mutual;
+    const goldenCinematic = goldenRuleCinematic();
+    const isCurrentPair = goldenRule.active
+      && reciprocal
+      && mutual
+      && goldenRule.sourceUniverseId === universe.id;
+    if (!isCurrentPair || goldenCinematic.phase === 'original') {
+      drawSafeCosmosUniverse(p, universe, cosmos, { role: isCurrentPair ? 'original' : 'standard' });
+    } else if (goldenCinematic.phase === 'comparison') {
+      drawSafeCosmosUniverse(p, universe, cosmos, { role: 'original' });
+      const splitX = cosmos.x + cosmos.w * goldenCinematic.divider;
+      drawSafeCosmosUniverse(p, reciprocal, cosmos, {
+        role: 'reciprocal',
+        clipRect: { x: splitX, y: cosmos.y, w: cosmos.x + cosmos.w - splitX, h: cosmos.h }
+      });
+    } else if (goldenCinematic.phase === 'fusion') {
+      drawSafeCosmosUniverse(p, universe, cosmos, { role: 'original' });
+      drawSafeCosmosUniverse(p, reciprocal, cosmos, {
+        role: 'reciprocal',
+        clipRect: { x: cosmos.x + cosmos.w * 0.5, y: cosmos.y, w: cosmos.w * 0.5, h: cosmos.h }
+      });
+      const mutualWidth = cosmos.w * goldenCinematic.fusion;
+      drawSafeCosmosUniverse(p, mutual, cosmos, {
+        role: 'mutual',
+        effect: 'mutual',
+        clipRect: {
+          x: cosmos.x + (cosmos.w - mutualWidth) * 0.5,
+          y: cosmos.y,
+          w: mutualWidth,
+          h: cosmos.h
+        }
+      });
+      drawReciprocityLattice(p, cosmos);
+    } else {
+      drawSafeCosmosUniverse(p, mutual, cosmos, { role: 'mutual', effect: 'mutual' });
       drawReciprocityLattice(p, cosmos);
     }
     if (state.selected) drawSafePaths(p, state.selected.strands, 220);
-    const goldenCinematic = goldenRuleCinematic();
-    const reciprocal = state.screensaver.goldenRule.reciprocal;
     if (state.screensaver.goldenRule.active && reciprocal && goldenCinematic.compare > 0.001) {
       drawSafePaths(p, reciprocal.strands, 180 * goldenCinematic.compare);
     }
@@ -2989,6 +3181,14 @@
       goldenRuleTransitionUniverseId: state.screensaver.goldenRule.transitionUniverseId,
       reciprocalUniverseId: state.screensaver.goldenRule.reciprocal?.id || null,
       reciprocalSeed: state.screensaver.goldenRule.reciprocal?.genome.seedHex || null,
+      reciprocalGalaxyCount: state.screensaver.goldenRule.reciprocal?.galaxies.length || 0,
+      mutualUniverseId: state.screensaver.goldenRule.mutual?.id || null,
+      mutualSeed: state.screensaver.goldenRule.mutual?.genome.seedHex || null,
+      mutualGalaxyCount: state.screensaver.goldenRule.mutual?.galaxies.length || 0,
+      cosmosFramePasses: state.cosmosFramePasses.map((pass) => ({
+        ...pass,
+        clip: { ...pass.clip }
+      })),
       screensaverFractalHome: state.screensaver.fractalHome ? { ...state.screensaver.fractalHome } : null,
       screensaverFractalTarget: state.screensaver.fractalTarget ? { ...state.screensaver.fractalTarget } : null,
       universeCount: state.universes.length,

@@ -166,6 +166,7 @@ app.whenReady().then(async () => {
   const zoomScreenshotPath = path.join('/tmp', 'butterfly-fx-universe-zoom.png');
   const screensaverScreenshotPath = path.join('/tmp', 'butterfly-fx-screensaver.png');
   const reciprocityScreenshotPath = path.join('/tmp', 'butterfly-fx-reciprocity.png');
+  const reciprocityFusionScreenshotPath = path.join('/tmp', 'butterfly-fx-reciprocity-fusion.png');
   let buddhabrotReport = null;
   let mandelbrotCinematicReport = null;
   let annularReport = null;
@@ -176,6 +177,8 @@ app.whenReady().then(async () => {
   let panReport = null;
   let cameraPersistenceReport = null;
   let reciprocityReport = null;
+  let reciprocityFusionReport = null;
+  let reciprocitySettledReport = null;
   let reciprocityReplayReport = null;
   expect(report.canvasCount === 1, 'exactly one p5 canvas should exist');
   expect(report.engine?.sourceVisual === 'mandelbrot', 'Mandelbrot should be the default source microscope');
@@ -476,6 +479,8 @@ app.whenReady().then(async () => {
     // Capture the held split after the reveal has reached center, not the
     // opening edge of the wipe, so visual regressions show both fields clearly.
     await new Promise((resolve) => setTimeout(resolve, 2850));
+    await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.renderOnce()`);
+    await new Promise((resolve) => setTimeout(resolve, 80));
     reciprocityReport = await window.webContents.executeJavaScript(`(() => {
       const engine = window.ButterflyFXDiagnostics.status();
       const signal = document.querySelector('#reciprocity-signal');
@@ -494,6 +499,8 @@ app.whenReady().then(async () => {
         cinematicChapter: document.querySelector('#reciprocity-phase')?.textContent,
         cinematicOriginal: document.querySelector('#reciprocity-original-seed')?.textContent,
         cinematicCounterpart: document.querySelector('#reciprocity-counterpart-seed')?.textContent,
+        cinematicOriginalMetrics: document.querySelector('#reciprocity-original-metrics')?.textContent,
+        cinematicCounterpartMetrics: document.querySelector('#reciprocity-counterpart-metrics')?.textContent,
         statusText: document.querySelector('#screensaver-status')?.textContent
       };
     })()`);
@@ -502,22 +509,59 @@ app.whenReady().then(async () => {
     expect(reciprocityReport.goldenRuleActive, 'typing goldenrule during Autogen should engage the reciprocity field');
     expect(reciprocityReport.reciprocalSeed && reciprocityReport.reciprocalSeed !== reciprocityReport.selectedSeed,
       'the reciprocity field should expose a deterministic counterfactual');
+    expect(reciprocityReport.reciprocalGalaxyCount > 0
+        && reciprocityReport.cosmosFramePasses.some((pass) => pass.role === 'original'
+          && pass.universeId === reciprocityReport.selectedUniverseId)
+        && reciprocityReport.cosmosFramePasses.some((pass) => pass.role === 'reciprocal'
+          && pass.universeId === reciprocityReport.reciprocalUniverseId
+          && pass.proxyUniverseId === reciprocityReport.reciprocalUniverseId),
+      'the held comparison should render both real universe fields and their own galaxy populations');
     expect(reciprocityReport.signalVisible && reciprocityReport.hudGolden && reciprocityReport.bodyGolden,
       'the reciprocity field should expose its secret visual state');
     expect(Math.abs(reciprocityReport.signalCosmosOffset - 18) < 0.1
       && reciprocityReport.universeStageLabelVisibility === 'hidden',
       'the field badge should align to the cosmos pane without colliding with its ordinary stage label');
-    expect(reciprocityReport.cinematicVisible && ['comparison', 'fusion'].includes(reciprocityReport.cinematicPhase),
-      'the per-universe cinematic should visibly advance from the original into comparison');
+    expect(reciprocityReport.cinematicVisible && reciprocityReport.cinematicPhase === 'comparison',
+      'the per-universe cinematic should hold a legible original-versus-reciprocal comparison');
     expect(reciprocityReport.cinematicOriginal === reciprocityReport.selectedSeed
       && reciprocityReport.cinematicCounterpart === reciprocityReport.reciprocalSeed,
       'the cinematic should label both sides of the current deterministic pair');
+    expect(/^D \d+ · T \d+ · S \d+$/.test(reciprocityReport.cinematicOriginalMetrics || '')
+      && /^D \d+ · T \d+ · S \d+$/.test(reciprocityReport.cinematicCounterpartMetrics || '')
+      && reciprocityReport.cinematicOriginalMetrics !== reciprocityReport.cinematicCounterpartMetrics,
+      'the comparison labels should expose visibly different field metrics');
     expect(/RECIPROCITY.*II RECIPROCAL REVEAL/i.test(reciprocityReport.statusText || ''),
       'the Autogen HUD should stay synchronized with the cinematic comparison phase');
     if (gpuSmoke) {
       const reciprocityImage = await window.webContents.capturePage();
       await fs.writeFile(reciprocityScreenshotPath, reciprocityImage.toPNG());
     }
+    await new Promise((resolve) => setTimeout(resolve, 2850));
+    await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.renderOnce()`);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    reciprocityFusionReport = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    const mutualPass = reciprocityFusionReport.cosmosFramePasses.find((pass) => pass.role === 'mutual');
+    expect(reciprocityFusionReport.goldenRulePhase === 'fusion'
+      && mutualPass?.effect === 'mutual'
+      && mutualPass.universeId === reciprocityFusionReport.mutualUniverseId
+      && mutualPass.proxyUniverseId === reciprocityFusionReport.mutualUniverseId
+      && reciprocityFusionReport.mutualGalaxyCount > 0
+      && mutualPass.clip.w > 0
+      && mutualPass.clip.w < reciprocityFusionReport.layout.cosmos.w,
+      'convergence should expand a distinct mutual field outward from the center');
+    if (gpuSmoke) {
+      const fusionImage = await window.webContents.capturePage();
+      await fs.writeFile(reciprocityFusionScreenshotPath, fusionImage.toPNG());
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.renderOnce()`);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    reciprocitySettledReport = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    expect(reciprocitySettledReport.goldenRulePhase === 'reciprocity'
+      && reciprocitySettledReport.cosmosFramePasses.length === 1
+      && reciprocitySettledReport.cosmosFramePasses[0].role === 'mutual'
+      && reciprocitySettledReport.cosmosFramePasses[0].universeId === reciprocitySettledReport.mutualUniverseId,
+      'the settled transformation should remain a distinct deterministic mutual universe');
     reciprocityReplayReport = await window.webContents.executeJavaScript(`(async () => {
       const previous = window.ButterflyFXDiagnostics.status();
       const generatedId = window.ButterflyFXDiagnostics.generateScreensaverUniverse();
@@ -566,6 +610,8 @@ app.whenReady().then(async () => {
     panReport,
     screensaverReport,
     reciprocityReport,
+    reciprocityFusionReport,
+    reciprocitySettledReport,
     reciprocityReplayReport,
     cameraPersistenceReport,
     compositionReport,
@@ -577,6 +623,7 @@ app.whenReady().then(async () => {
     zoomScreenshotPath,
     screensaverScreenshotPath,
     reciprocityScreenshotPath,
+    reciprocityFusionScreenshotPath,
     reportPath
   };
   await fs.writeFile(reportPath, JSON.stringify(payload, null, 2));
