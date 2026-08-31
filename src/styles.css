@@ -268,7 +268,7 @@ kbd {
 
 .gpu-badge {
   display: grid;
-  grid-template-columns: 8px auto auto;
+  grid-template-columns: 19px auto auto;
   align-items: center;
   gap: 8px;
   height: 32px;
@@ -284,23 +284,53 @@ kbd {
   color: var(--muted);
 }
 
-.gpu-light {
-  width: 6px;
-  height: 6px;
+.optics-mark {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 19px;
+  height: 14px;
+  color: var(--amber);
+  background: transparent;
+  box-shadow: none;
+}
+
+.optics-mark::before,
+.optics-mark::after {
+  position: absolute;
+  top: 3px;
+  width: 10px;
+  height: 7px;
+  border: 1px solid currentColor;
   border-radius: 50%;
-  background: var(--amber);
-  box-shadow: 0 0 8px rgba(244, 185, 95, 0.65);
+  content: "";
+  opacity: 0.86;
 }
 
-.gpu-badge.is-hardware .gpu-light {
-  background: var(--success);
-  box-shadow: 0 0 9px rgba(138, 227, 180, 0.75);
+.optics-mark::before {
+  left: 0;
+  transform: rotate(-24deg);
 }
 
-.gpu-badge.is-software .gpu-light,
-.gpu-badge.is-error .gpu-light {
-  background: var(--error);
-  box-shadow: 0 0 9px rgba(255, 102, 122, 0.7);
+.optics-mark::after {
+  right: 0;
+  transform: rotate(24deg);
+}
+
+.gpu-badge.is-hardware .optics-mark {
+  color: var(--cyan);
+}
+
+.gpu-badge.is-hardware .optics-mark::after {
+  color: var(--magenta);
+}
+
+.gpu-badge.is-software .optics-mark {
+  color: var(--amber);
+}
+
+.gpu-badge.is-error .optics-mark {
+  color: var(--error);
 }
 
 .main-workspace {
@@ -1885,13 +1915,22 @@ input[type="range"]::-webkit-slider-thumb {
   line-height: 1.4;
 }
 
-.screensaver-notice i {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--success);
-  box-shadow: 0 0 8px var(--success);
+.screensaver-notice .optics-mark--notice {
+  width: 25px;
+  height: 18px;
+  color: var(--cyan);
+}
+
+.screensaver-notice .optics-mark--notice::before,
+.screensaver-notice .optics-mark--notice::after {
+  top: 4px;
+  width: 13px;
+  height: 9px;
+  border-radius: 64% 36% 64% 36%;
+}
+
+.screensaver-notice .optics-mark--notice::after {
+  color: var(--magenta);
 }
 
 body.screensaver-mode .app-shell {
@@ -1943,16 +1982,22 @@ body.screensaver-mode .cosmos-camera-gesture {
   border-bottom: 1px solid var(--line);
 }
 
-.gpu-summary > span {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--amber);
-  box-shadow: 0 0 13px currentColor;
+.gpu-summary > .optics-mark--large {
+  width: 38px;
+  height: 27px;
 }
 
-.gpu-summary.is-hardware > span { background: var(--success); }
-.gpu-summary.is-software > span { background: var(--error); }
+.gpu-summary > .optics-mark--large::before,
+.gpu-summary > .optics-mark--large::after {
+  top: 5px;
+  width: 21px;
+  height: 16px;
+  border-radius: 68% 32% 68% 32%;
+}
+
+.gpu-summary.is-hardware > .optics-mark { color: var(--cyan); }
+.gpu-summary.is-hardware > .optics-mark::after { color: var(--magenta); }
+.gpu-summary.is-software > .optics-mark { color: var(--amber); }
 .gpu-summary div { display: flex; flex-direction: column; gap: 5px; }
 .gpu-summary b { font: 10px/1 var(--mono); letter-spacing: 0.07em; }
 .gpu-summary p { margin: 0; color: var(--muted); font-size: 10px; }
@@ -2443,10 +2488,8 @@ kbd {
   border-left-color: rgba(242, 238, 231, 0.09);
 }
 
-.gpu-light {
-  width: 5px;
-  height: 5px;
-  box-shadow: 0 0 12px currentColor;
+.optics-mark {
+  box-shadow: none;
 }
 
 .main-workspace {
@@ -3593,7 +3636,7 @@ input[type="range"]::-webkit-slider-thumb {
   grid-template-columns: 19px auto auto;
 }
 
-.gpu-light {
+.optics-mark {
   position: relative;
   width: 19px;
   height: 14px;
@@ -3603,8 +3646,8 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: none;
 }
 
-.gpu-light::before,
-.gpu-light::after {
+.optics-mark::before,
+.optics-mark::after {
   position: absolute;
   top: 3px;
   width: 10px;
@@ -3615,37 +3658,37 @@ input[type="range"]::-webkit-slider-thumb {
   opacity: 0.86;
 }
 
-.gpu-light::before {
+.optics-mark::before {
   left: 0;
   transform: rotate(-24deg);
 }
 
-.gpu-light::after {
+.optics-mark::after {
   right: 0;
   transform: rotate(24deg);
 }
 
-.gpu-badge.is-checking .gpu-light {
+.gpu-badge.is-checking .optics-mark {
   animation: optics-breathe 1.6s ease-in-out infinite alternate;
 }
 
-.gpu-badge.is-hardware .gpu-light {
+.gpu-badge.is-hardware .optics-mark {
   background: transparent;
   color: var(--cyan);
   box-shadow: none;
 }
 
-.gpu-badge.is-hardware .gpu-light::after {
+.gpu-badge.is-hardware .optics-mark::after {
   color: var(--magenta);
 }
 
-.gpu-badge.is-software .gpu-light {
+.gpu-badge.is-software .optics-mark {
   background: transparent;
   color: var(--amber);
   box-shadow: none;
 }
 
-.gpu-badge.is-error .gpu-light {
+.gpu-badge.is-error .optics-mark {
   background: transparent;
   color: var(--error);
   box-shadow: none;
@@ -3655,7 +3698,7 @@ input[type="range"]::-webkit-slider-thumb {
   to { opacity: 0.44; scale: 0.94; }
 }
 
-.gpu-summary > span {
+.gpu-summary > .optics-mark {
   position: relative;
   width: 38px;
   height: 27px;
@@ -3666,8 +3709,8 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: none;
 }
 
-.gpu-summary > span::before,
-.gpu-summary > span::after {
+.gpu-summary > .optics-mark::before,
+.gpu-summary > .optics-mark::after {
   position: absolute;
   top: 5px;
   width: 21px;
@@ -3677,26 +3720,26 @@ input[type="range"]::-webkit-slider-thumb {
   content: "";
 }
 
-.gpu-summary > span::before {
+.gpu-summary > .optics-mark::before {
   left: 0;
   transform: rotate(-18deg);
 }
 
-.gpu-summary > span::after {
+.gpu-summary > .optics-mark::after {
   right: 0;
   transform: scaleX(-1) rotate(-18deg);
 }
 
-.gpu-summary.is-hardware > span {
+.gpu-summary.is-hardware > .optics-mark {
   background: transparent;
   color: var(--cyan);
 }
 
-.gpu-summary.is-hardware > span::after {
+.gpu-summary.is-hardware > .optics-mark::after {
   color: var(--magenta);
 }
 
-.gpu-summary.is-software > span {
+.gpu-summary.is-software > .optics-mark {
   background: transparent;
   color: var(--amber);
 }

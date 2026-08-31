@@ -123,8 +123,27 @@ app.whenReady().then(async () => {
     archiveText: document.querySelector('#universe-count')?.textContent,
     selectedUniverse: document.querySelector('#selected-name')?.textContent,
     bodyOverflow: getComputedStyle(document.body).overflow,
-    dialogs: document.querySelectorAll('dialog').length
-    ,engine: window.ButterflyFXDiagnostics?.status()
+    dialogs: document.querySelectorAll('dialog').length,
+    opticsMark: (() => {
+      const mark = document.querySelector('#gpu-button .optics-mark');
+      const style = mark ? getComputedStyle(mark) : null;
+      const wing = mark ? getComputedStyle(mark, '::before') : null;
+      return {
+        count: document.querySelectorAll('#gpu-button .optics-mark').length,
+        legacyCount: document.querySelectorAll('.gpu-light').length,
+        width: style?.width,
+        height: style?.height,
+        background: style?.backgroundColor,
+        wingBorder: wing?.borderTopStyle
+      };
+    })(),
+    opticsNoticeCount: document.querySelectorAll('.screensaver-notice > .optics-mark').length,
+    legacyNoticeCount: document.querySelectorAll('.screensaver-notice > i').length,
+    versionedAssets: {
+      styles: document.querySelector('link[rel="stylesheet"]')?.href.includes('?v='),
+      app: [...document.scripts].some((script) => /app\\.js\\?v=/.test(script.src))
+    },
+    engine: window.ButterflyFXDiagnostics?.status()
   })`);
 
   const screenshotPath = path.join('/tmp', 'butterfly-fx-smoke.png');
@@ -146,6 +165,16 @@ app.whenReady().then(async () => {
   let reciprocityReport = null;
   expect(report.canvasCount === 1, 'exactly one p5 canvas should exist');
   expect(report.engine?.sourceVisual === 'mandelbrot', 'Mandelbrot should be the default source microscope');
+  expect(report.opticsMark?.count === 1 && report.opticsMark?.legacyCount === 0,
+    'render status should use one optics mark and no legacy traffic-light element');
+  expect(report.opticsMark?.width === '19px' && report.opticsMark?.height === '14px',
+    'render status optics mark should keep the twin-orbit silhouette');
+  expect(report.opticsMark?.background === 'rgba(0, 0, 0, 0)' && report.opticsMark?.wingBorder !== 'none',
+    'render status should be transparent outlined optics rather than a filled status dot');
+  expect(report.opticsNoticeCount === 1 && report.legacyNoticeCount === 0,
+    'Autogen notice should use the optics mark and no traffic-light dot');
+  expect(report.versionedAssets?.styles && report.versionedAssets?.app,
+    'release-critical CSS and app assets should carry cache-busting versions');
   expect(report.engine?.universeCount >= 1 || !gpuSmoke, 'draw gesture should create a universe in GPU mode');
   expect(!gpuSmoke || report.engine?.universeCount === beforeDraw.universeCount + 1,
     'one completed draw gesture should create exactly one universe');

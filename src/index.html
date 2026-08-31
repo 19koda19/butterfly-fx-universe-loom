@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Butterfly FX — Universe Loom</title>
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=observatory-20260831b">
 </head>
 <body>
   <div class="app-shell">
@@ -34,7 +34,7 @@
         <button class="text-action" id="science-button">Science notes</button>
         <button class="text-action" id="license-button" aria-label="Open-source licenses and credits" title="Open-source licenses and credits">Open source</button>
         <button class="gpu-badge is-checking" id="gpu-button" aria-haspopup="dialog">
-          <span class="gpu-light"></span>
+          <span class="optics-mark" aria-hidden="true"></span>
           <span id="gpu-label">OPTICS · WARMING</span>
           <span id="fps-label">-- FPS</span>
         </button>
@@ -380,7 +380,7 @@ dz/dt = xy − βz</pre>
       <div><span>LIGHT PATH</span><h2 id="gpu-dialog-title">Field Optics</h2></div>
       <button class="dialog-close icon-button" aria-label="Close diagnostics">×</button>
     </div>
-    <div class="gpu-summary" id="gpu-summary"><span></span><div><b>READING THE LIGHT PATH</b><p>The instrument is tracing how this universe becomes light.</p></div></div>
+    <div class="gpu-summary" id="gpu-summary"><i class="optics-mark optics-mark--large" aria-hidden="true"></i><div><b>READING THE LIGHT PATH</b><p>The instrument is tracing how this universe becomes light.</p></div></div>
     <dl class="diagnostic-grid" id="diagnostic-grid"></dl>
     <div class="dialog-actions"><button id="copy-diagnostics">COPY DIAGNOSTICS</button><button class="dialog-close accent-button">DONE</button></div>
   </dialog>
@@ -434,7 +434,7 @@ dz/dt = xy − βz</pre>
         <span><b>NEW UNIVERSE INTERVAL</b><output id="screensaver-interval-value">24 seconds</output></span>
         <input id="screensaver-interval" type="range" min="10" max="90" step="2" value="24">
       </label>
-      <div class="screensaver-notice"><i></i><span>Fullscreen uses the active WebGL renderer. Safe Preview remains available when hardware acceleration is unavailable.</span></div>
+      <div class="screensaver-notice"><span class="optics-mark optics-mark--notice" aria-hidden="true"></span><span>Fullscreen uses the active WebGL renderer. Safe Preview remains available when hardware acceleration is unavailable.</span></div>
     </div>
     <div class="dialog-actions"><button class="dialog-close">CANCEL</button><button class="accent-button" id="start-screensaver">START AUTOGEN ⛶</button></div>
   </dialog>
@@ -446,6 +446,6 @@ dz/dt = xy − βz</pre>
   <script src="./simulation.js"></script>
   <script src="./shaders.js"></script>
   <script src="./buddhabrot.js"></script>
-  <script src="./app.js"></script>
+  <script src="./app.js?v=observatory-20260831b"></script>
 </body>
 </html>
