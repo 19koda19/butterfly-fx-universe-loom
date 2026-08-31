@@ -20,6 +20,13 @@
   const GOLDEN_SECRET = 'goldenrule';
   const PHI = MathX.PHI || ((1 + Math.sqrt(5)) / 2);
   const GOLDEN_ANGLE = MathX.GOLDEN_ANGLE || (MathX.TAU / (PHI * PHI));
+  const GOLDEN_CINEMATIC = Object.freeze({
+    originalEnd: 1400,
+    comparisonRevealEnd: 2400,
+    comparisonEnd: 4700,
+    fusionEnd: 7300,
+    cameraDelay: 8200
+  });
   // Keep the inferred luminous scaffolds subordinate to the stellar particles.
   const GALAXY_STRUCTURE_OPACITY = 0.68;
 
@@ -112,7 +119,10 @@
         activatedAt: 0,
         previousFocus: null,
         sourceUniverseId: null,
-        reciprocal: null
+        reciprocal: null,
+        transitionStartedAt: 0,
+        transitionUniverseId: null,
+        transitionPhase: 'idle'
       }
     }
   };
@@ -617,10 +627,158 @@
     return id;
   }
 
-  function goldenRuleStrength(now = performance.now()) {
+  function cinematicEase(value) {
+    const t = MathX.clamp(value);
+    return t * t * (3 - 2 * t);
+  }
+
+  function goldenRuleCinematic(now = performance.now()) {
     const goldenRule = state.screensaver.goldenRule;
-    if (!goldenRule.active) return 0;
-    return MathX.clamp((now - goldenRule.activatedAt) / 1400);
+    const idle = {
+      phase: 'idle',
+      elapsed: 0,
+      compare: 0,
+      fusion: 0,
+      lattice: 0,
+      divider: 1.04,
+      progress: 0
+    };
+    if (!goldenRule.active || !goldenRule.reciprocal) return idle;
+
+    const startedAt = goldenRule.transitionStartedAt || goldenRule.activatedAt || now;
+    const elapsed = Math.max(0, now - startedAt);
+    const progress = MathX.clamp(elapsed / GOLDEN_CINEMATIC.fusionEnd);
+
+    if (elapsed < GOLDEN_CINEMATIC.originalEnd) {
+      return { ...idle, phase: 'original', elapsed, progress };
+    }
+    if (elapsed < GOLDEN_CINEMATIC.comparisonEnd) {
+      const reveal = cinematicEase(
+        (elapsed - GOLDEN_CINEMATIC.originalEnd)
+          / (GOLDEN_CINEMATIC.comparisonRevealEnd - GOLDEN_CINEMATIC.originalEnd)
+      );
+      return {
+        phase: 'comparison',
+        elapsed,
+        compare: reveal,
+        fusion: 0,
+        lattice: 0,
+        divider: MathX.lerp(1.04, 0.5, reveal),
+        progress
+      };
+    }
+    if (elapsed < GOLDEN_CINEMATIC.fusionEnd) {
+      const fusion = cinematicEase(
+        (elapsed - GOLDEN_CINEMATIC.comparisonEnd)
+          / (GOLDEN_CINEMATIC.fusionEnd - GOLDEN_CINEMATIC.comparisonEnd)
+      );
+      return {
+        phase: 'fusion',
+        elapsed,
+        compare: 1 - fusion,
+        fusion,
+        lattice: fusion,
+        divider: 0.5,
+        progress
+      };
+    }
+    return {
+      phase: 'reciprocity',
+      elapsed,
+      compare: 0,
+      fusion: 1,
+      lattice: 1,
+      divider: 0.5,
+      progress: 1
+    };
+  }
+
+  function goldenRuleStrength(now = performance.now()) {
+    return goldenRuleCinematic(now).fusion;
+  }
+
+  function goldenRuleStatusText(cinematic) {
+    const reciprocal = state.screensaver.goldenRule.reciprocal;
+    const depth = 1 / Math.max(COSMOS_MIN_SCALE, state.cosmosCamera.scale);
+    const depthLabel = state.focusView === 'both' ? 'DUAL DEPTH' : 'DEPTH';
+    const phaseLabel = {
+      original: 'I ORIGINAL FIELD',
+      comparison: 'II RECIPROCAL REVEAL',
+      fusion: 'III CONVERGENCE',
+      reciprocity: 'MUTUAL FIELD'
+    }[cinematic.phase] || 'INITIALIZING';
+    return `φ RECIPROCITY · ${phaseLabel} · ${state.selected?.genome.seedHex || 'AWAITING'} ↔ ${reciprocal?.genome.seedHex || 'AWAITING'} · ${depthLabel} ${depth < 10 ? depth.toFixed(1) : Math.round(depth)}×`;
+  }
+
+  function beginGoldenRuleTransition(universe, reciprocal, now = performance.now()) {
+    const goldenRule = state.screensaver.goldenRule;
+    goldenRule.transitionStartedAt = now;
+    goldenRule.transitionUniverseId = universe?.id || null;
+    goldenRule.transitionPhase = 'original';
+    state.clearBeforeFrame = true;
+
+    const originalSeed = universe?.genome.seedHex || 'AWAITING';
+    const reciprocalSeed = reciprocal?.genome.seedHex || 'AWAITING';
+    const originalLabel = $('#reciprocity-original-seed');
+    const reciprocalLabel = $('#reciprocity-counterpart-seed');
+    if (originalLabel) originalLabel.textContent = originalSeed;
+    if (reciprocalLabel) reciprocalLabel.textContent = reciprocalSeed;
+
+    // DOM phase cues should keep time even if a browser throttles the p5 draw
+    // loop while entering fullscreen. The timestamp guard retires an older
+    // ticker as soon as Autogen selects the next universe.
+    syncGoldenRuleCinematic(now);
+    const transitionToken = now;
+    const tickCinematic = () => {
+      if (!goldenRule.active || goldenRule.transitionStartedAt !== transitionToken) return;
+      const cinematic = syncGoldenRuleCinematic();
+      if (cinematic.elapsed < GOLDEN_CINEMATIC.fusionEnd) setTimeout(tickCinematic, 80);
+    };
+    setTimeout(tickCinematic, 80);
+  }
+
+  function syncGoldenRuleCinematic(now = performance.now()) {
+    const overlay = $('#reciprocity-cinematic');
+    if (!overlay) return goldenRuleCinematic(now);
+    const goldenRule = state.screensaver.goldenRule;
+    const cosmos = state.layout?.cosmos;
+    const cinematic = goldenRuleCinematic(now);
+    const visible = goldenRule.active && goldenRule.reciprocal && cosmos?.w > 1;
+    overlay.hidden = !visible;
+    if (!visible) return cinematic;
+
+    overlay.style.left = `${cosmos.x}px`;
+    overlay.style.width = `${cosmos.w}px`;
+    const signal = $('#reciprocity-signal');
+    if (signal) signal.style.left = `${cosmos.x + 18}px`;
+    overlay.style.setProperty('--reciprocity-compare', cinematic.compare.toFixed(4));
+    overlay.style.setProperty('--reciprocity-fusion', cinematic.fusion.toFixed(4));
+    overlay.style.setProperty('--reciprocity-flare-scale', (1 + cinematic.fusion * 22).toFixed(3));
+    overlay.style.setProperty('--reciprocity-divider', `${(cinematic.divider * 100).toFixed(2)}%`);
+    overlay.style.setProperty('--reciprocity-progress', cinematic.progress.toFixed(4));
+
+    const phaseChanged = overlay.dataset.phase !== cinematic.phase;
+    overlay.dataset.phase = cinematic.phase;
+    goldenRule.transitionPhase = cinematic.phase;
+    if (phaseChanged) {
+      overlay.classList.remove('is-phase-entering');
+      if (!state.reducedMotion) {
+        void overlay.offsetWidth;
+        overlay.classList.add('is-phase-entering');
+      }
+      const copy = {
+        original: ['I · ORIGINAL FIELD', 'OBSERVE THE INITIAL CONDITION'],
+        comparison: ['II · RECIPROCAL REVEAL', 'LEFT: ORIGINAL · RIGHT: COUNTERFACTUAL'],
+        fusion: ['III · CONVERGENCE', 'DIFFERENCE RESOLVES INTO A MUTUAL FIELD'],
+        reciprocity: ['φ · RECIPROCITY', 'AGREEMENT GLOWS · DIFFERENCE REMAINS']
+      }[cinematic.phase];
+      if (copy) {
+        $('#reciprocity-phase').textContent = copy[0];
+        $('#reciprocity-phase-detail').textContent = copy[1];
+      }
+      if (state.screensaver.active) $('#screensaver-status').textContent = goldenRuleStatusText(cinematic);
+    }
+    return cinematic;
   }
 
   function refreshReciprocalUniverse(universe = state.selected) {
@@ -656,6 +814,7 @@
     goldenRule.reciprocal = reciprocal;
     const pair = $('#reciprocity-pair');
     if (pair) pair.textContent = `${universe.genome.seedHex} ↔ ${reciprocal.genome.seedHex}`;
+    beginGoldenRuleTransition(universe, reciprocal);
     return reciprocal;
   }
 
@@ -675,7 +834,7 @@
       const reciprocal = refreshReciprocalUniverse();
       resetCosmosCamera({ quiet: true, immediate: true, motion: 'tour' });
       state.screensaver.cameraStep = 0;
-      state.screensaver.nextCameraAt = performance.now() + 1618;
+      state.screensaver.nextCameraAt = performance.now() + GOLDEN_CINEMATIC.cameraDelay;
       state.clearBeforeFrame = true;
       const pairLabel = reciprocal && state.selected
         ? `${state.selected.genome.seedHex} and ${reciprocal.genome.seedHex}`
@@ -687,6 +846,14 @@
       goldenRule.previousFocus = null;
       goldenRule.sourceUniverseId = null;
       goldenRule.reciprocal = null;
+      goldenRule.transitionStartedAt = 0;
+      goldenRule.transitionUniverseId = null;
+      goldenRule.transitionPhase = 'idle';
+      const cinematic = $('#reciprocity-cinematic');
+      if (cinematic) {
+        cinematic.hidden = true;
+        cinematic.dataset.phase = 'idle';
+      }
       if (restoreFocus && state.screensaver.active) setFocusView(restoreFocus);
       state.clearBeforeFrame = true;
       if (state.screensaver.active) $('#screensaver-status').textContent = 'RECIPROCITY RELEASED · AUTOGEN CONTINUES';
@@ -867,7 +1034,9 @@
     }
     const now = performance.now();
     state.screensaver.nextAt = now + state.screensaver.interval * 1000;
-    state.screensaver.nextCameraAt = now + 4800;
+    state.screensaver.nextCameraAt = now + (state.screensaver.goldenRule.active
+      ? GOLDEN_CINEMATIC.cameraDelay
+      : 4800);
     state.screensaver.cameraStep = 0;
     state.screensaver.tourTargetId = null;
     renderArchive();
@@ -1280,7 +1449,7 @@
     const reciprocal = goldenRule.active && goldenRule.sourceUniverseId === universe.id
       ? goldenRule.reciprocal
       : null;
-    const goldenStrength = reciprocal ? goldenRuleStrength() : 0;
+    const cinematic = goldenRuleCinematic();
     return {
       uTime: performance.now() * 0.001,
       uAge: state.age,
@@ -1289,8 +1458,10 @@
       uSharedSeed: seedVector((sharedUniverse || universe).genome.seed),
       uReciprocalSeed: seedVector((reciprocal || universe).genome.seed),
       uCorrelation: correlation,
-      uGoldenRule: goldenStrength,
-      uGoldenPhase: goldenRule.active ? (performance.now() - goldenRule.activatedAt) * 0.001 : 0,
+      uGoldenRule: reciprocal ? cinematic.fusion : 0,
+      uGoldenCompare: reciprocal ? cinematic.compare : 0,
+      uGoldenDivider: reciprocal ? cinematic.divider : 1.04,
+      uGoldenPhase: reciprocal ? cinematic.elapsed * 0.001 : 0,
       uDensity: genome.metrics.density,
       uTurbulence: genome.metrics.turbulence,
       uSpin: genome.metrics.spin,
@@ -1343,7 +1514,7 @@
     const coordinateOffsetY = state.webglReady ? p.height / 2 : 0;
     const centerX = rect.x + rect.w * 0.5 - coordinateOffsetX;
     const centerY = rect.y + rect.h * 0.5 - coordinateOffsetY;
-    const elapsed = performance.now() - goldenRule.activatedAt;
+    const elapsed = performance.now() - (goldenRule.transitionStartedAt || goldenRule.activatedAt);
     const rotation = state.reducedMotion ? 0 : elapsed * 0.000075;
     const points = Array.from({ length: count }, (_, index) => {
       const fraction = (index + 0.5) / count;
@@ -1954,6 +2125,11 @@
     }
 
     if (state.selected) drawPathSet(p, state.selected.strands, 210);
+    const goldenCinematic = goldenRuleCinematic();
+    const reciprocal = state.screensaver.goldenRule.reciprocal;
+    if (state.screensaver.goldenRule.active && reciprocal && goldenCinematic.compare > 0.001) {
+      drawPathSet(p, reciprocal.strands, 175 * goldenCinematic.compare);
+    }
     if (state.bundle.length) drawPathSet(p, state.bundle, 190);
     if (state.currentStroke?.length) {
       drawPathSet(p, [{ points: state.currentStroke, role: $('#strand-role').value }], 245);
@@ -2100,6 +2276,11 @@
       drawReciprocityLattice(p, cosmos);
     }
     if (state.selected) drawSafePaths(p, state.selected.strands, 220);
+    const goldenCinematic = goldenRuleCinematic();
+    const reciprocal = state.screensaver.goldenRule.reciprocal;
+    if (state.screensaver.goldenRule.active && reciprocal && goldenCinematic.compare > 0.001) {
+      drawSafePaths(p, reciprocal.strands, 180 * goldenCinematic.compare);
+    }
     if (state.bundle.length) drawSafePaths(p, state.bundle, 190);
     if (state.currentStroke?.length) drawSafePaths(p, [{ points: state.currentStroke, role: $('#strand-role').value }], 245);
 
@@ -2297,6 +2478,7 @@
 
       p.draw = () => {
         const now = performance.now();
+        const goldenCinematic = syncGoldenRuleCinematic(now);
         if (state.screensaver.active) {
           if (now >= state.screensaver.nextAt) autoGenerateUniverse();
           if (now >= state.screensaver.nextCameraAt) tourCosmosCamera(now);
@@ -2306,9 +2488,8 @@
               : null;
             const depth = 1 / Math.max(COSMOS_MIN_SCALE, state.cosmosCamera.scale);
             const depthLabel = state.focusView === 'both' ? 'DUAL DEPTH' : 'DEPTH';
-            const reciprocal = state.screensaver.goldenRule.reciprocal;
             $('#screensaver-status').textContent = state.screensaver.goldenRule.active
-              ? `φ RECIPROCITY · ${state.selected?.genome.seedHex || 'AWAITING'} ↔ ${reciprocal?.genome.seedHex || 'AWAITING'} · ${depthLabel} ${depth < 10 ? depth.toFixed(1) : Math.round(depth)}×`
+              ? goldenRuleStatusText(goldenCinematic)
               : (remaining === null
                 ? 'INITIALIZING FIRST GENOME…'
                 : `NEXT GENOME IN ${remaining}s · ${depthLabel} ${depth < 10 ? depth.toFixed(1) : Math.round(depth)}× · ${state.universes.length} BOTTLED`);
@@ -2777,8 +2958,10 @@
     resetUniverseCamera: () => resetCosmosCamera({ quiet: true, immediate: true }),
     setUniverseCamera: (view) => setCosmosCameraTarget(view, { immediate: true }),
     tourUniverseCamera: () => tourCosmosCamera(performance.now()),
+    generateScreensaverUniverse: () => (state.screensaver.active ? autoGenerateUniverse()?.id || null : null),
     status: () => {
       const inspected = state.selected?.galaxies.find((galaxy) => galaxy.id === state.cosmosCamera.inspectId) || null;
+      const goldenCinematic = goldenRuleCinematic();
       return ({
       webglReady: state.webglReady,
       webgl2: state.webgl2,
@@ -2800,6 +2983,10 @@
       screensaverView: state.screensaver.view,
       screensaverGenerationCount: state.screensaver.generationCount,
       goldenRuleActive: state.screensaver.goldenRule.active,
+      goldenRulePhase: goldenCinematic.phase,
+      goldenRuleCompare: goldenCinematic.compare,
+      goldenRuleFusion: goldenCinematic.fusion,
+      goldenRuleTransitionUniverseId: state.screensaver.goldenRule.transitionUniverseId,
       reciprocalUniverseId: state.screensaver.goldenRule.reciprocal?.id || null,
       reciprocalSeed: state.screensaver.goldenRule.reciprocal?.genome.seedHex || null,
       screensaverFractalHome: state.screensaver.fractalHome ? { ...state.screensaver.fractalHome } : null,

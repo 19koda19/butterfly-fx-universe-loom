@@ -3743,3 +3743,258 @@ input[type="range"]::-webkit-slider-thumb {
   background: transparent;
   color: var(--amber);
 }
+
+/* The workspace modes read as quiet editorial navigation instead of another
+   segmented control competing with the instrument itself. */
+.view-modes {
+  width: min(320px, calc(100% - 28px));
+  height: 34px;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.view-modes .mode-button {
+  min-width: 76px;
+  height: 30px;
+  padding: 0 5px;
+  flex: 1 1 0;
+  gap: 3px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #756f7a;
+  opacity: 0.68;
+}
+
+.view-modes .mode-button span {
+  font-size: 9px;
+  font-weight: 540;
+  letter-spacing: 0.015em;
+}
+
+.view-modes .mode-button small {
+  color: #5e5962;
+  font-size: 5px;
+  letter-spacing: 0.1em;
+}
+
+.view-modes .mode-button:hover:not(:disabled),
+.view-modes .mode-button:focus-visible {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #c7c0b8;
+  opacity: 0.9;
+}
+
+.view-modes .mode-button.is-active {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #eee8df;
+  opacity: 1;
+}
+
+.view-modes .mode-button.is-active small {
+  color: #9a929d;
+}
+
+body.golden-rule-mode .universe-stage-label {
+  visibility: hidden;
+}
+
+/* Per-universe three-act reveal for the hidden reciprocal field. The overlay
+   follows the live cosmos rectangle in both split and full-universe layouts. */
+.reciprocity-cinematic {
+  --reciprocity-compare: 0;
+  --reciprocity-fusion: 0;
+  --reciprocity-flare-scale: 1;
+  --reciprocity-divider: 104%;
+  --reciprocity-progress: 0;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+  isolation: isolate;
+}
+
+.reciprocity-cinematic[hidden] {
+  display: none;
+}
+
+.reciprocity-cinematic::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  opacity: var(--reciprocity-fusion);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 226, 143, 0.09), transparent 19%),
+    radial-gradient(circle at 50% 50%, transparent 34%, rgba(27, 12, 2, 0.2) 76%, rgba(4, 3, 5, 0.5));
+}
+
+.reciprocity-cinematic-flare {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: var(--reciprocity-fusion);
+  transform: translate(-50%, -50%) scale(var(--reciprocity-flare-scale));
+  background: rgba(255, 240, 181, 0.2);
+  box-shadow:
+    0 0 3px rgba(255, 249, 220, 0.9),
+    0 0 22px rgba(255, 205, 88, 0.5),
+    0 0 70px rgba(244, 185, 95, 0.2);
+}
+
+.reciprocity-cinematic-comparison {
+  position: absolute;
+  inset: 0;
+}
+
+.reciprocity-cinematic-label {
+  position: absolute;
+  top: 128px;
+  display: flex;
+  min-width: 112px;
+  flex-direction: column;
+  gap: 5px;
+  opacity: var(--reciprocity-compare);
+  text-shadow: 0 2px 14px #000;
+  transform: translateY(0);
+}
+
+.reciprocity-cinematic-label.is-original {
+  left: 18px;
+  color: #a8e9f0;
+}
+
+.reciprocity-cinematic-label.is-counterpart {
+  right: 18px;
+  align-items: flex-end;
+  color: #ffe09a;
+  text-align: right;
+}
+
+.reciprocity-cinematic-label span {
+  font: 7px/1 var(--mono);
+  letter-spacing: 0.16em;
+}
+
+.reciprocity-cinematic-label b {
+  color: rgba(236, 232, 224, 0.72);
+  font: 6px/1 var(--mono);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.reciprocity-cinematic-divider {
+  position: absolute;
+  top: 112px;
+  bottom: 74px;
+  left: var(--reciprocity-divider);
+  width: 1px;
+  opacity: var(--reciprocity-compare);
+  transform: scaleY(var(--reciprocity-compare));
+  background: linear-gradient(transparent, #ffe8a9 14% 86%, transparent);
+  box-shadow:
+    0 0 8px rgba(255, 235, 174, 0.85),
+    0 0 28px rgba(244, 185, 95, 0.42);
+}
+
+.reciprocity-cinematic-divider::before,
+.reciprocity-cinematic-divider::after {
+  position: absolute;
+  left: -3px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(255, 232, 169, 0.75);
+  border-radius: 50%;
+  content: "";
+  background: rgba(8, 6, 8, 0.88);
+  box-shadow: 0 0 10px rgba(255, 209, 91, 0.65);
+}
+
+.reciprocity-cinematic-divider::before { top: 0; }
+.reciprocity-cinematic-divider::after { bottom: 0; }
+
+.reciprocity-cinematic-chapter {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  display: grid;
+  width: min(310px, calc(100% - 36px));
+  justify-items: center;
+  gap: 5px;
+  padding: 9px 14px 8px;
+  border: 1px solid rgba(255, 225, 145, 0.2);
+  border-radius: 14px 4px 14px 4px;
+  background: rgba(10, 7, 8, 0.64);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  text-shadow: 0 1px 12px #000;
+  transform: translateX(-50%);
+  backdrop-filter: blur(12px);
+}
+
+.reciprocity-cinematic.is-phase-entering .reciprocity-cinematic-chapter {
+  animation: reciprocity-chapter-arrive 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.reciprocity-cinematic-chapter > span {
+  color: #ffe5a1;
+  font: 8px/1 var(--mono);
+  letter-spacing: 0.18em;
+}
+
+.reciprocity-cinematic-chapter > b {
+  color: rgba(220, 211, 193, 0.68);
+  font: 6px/1 var(--mono);
+  font-weight: 500;
+  letter-spacing: 0.11em;
+}
+
+.reciprocity-cinematic-chapter > i {
+  display: block;
+  width: 100%;
+  height: 1px;
+  margin-top: 2px;
+  overflow: hidden;
+  background: rgba(255, 224, 143, 0.13);
+}
+
+.reciprocity-cinematic-chapter > i > b {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(var(--reciprocity-progress));
+  transform-origin: left center;
+  background: linear-gradient(90deg, #83ded5, #ffe09a 62%, #fff3c7);
+  box-shadow: 0 0 8px rgba(255, 214, 111, 0.5);
+}
+
+.reciprocity-cinematic[data-phase="original"] .reciprocity-cinematic-chapter {
+  border-color: rgba(131, 222, 213, 0.18);
+}
+
+.reciprocity-cinematic[data-phase="original"] .reciprocity-cinematic-chapter > span {
+  color: #afe9e3;
+}
+
+.reciprocity-cinematic[data-phase="reciprocity"] .reciprocity-cinematic-chapter {
+  opacity: 0.72;
+}
+
+@keyframes reciprocity-chapter-arrive {
+  from { opacity: 0; filter: blur(7px); transform: translate(-50%, -9px); }
+  to { opacity: 1; filter: blur(0); transform: translate(-50%, 0); }
+}

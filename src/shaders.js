@@ -124,6 +124,8 @@
     uniform vec4 uReciprocalSeed;
     uniform float uCorrelation;
     uniform float uGoldenRule;
+    uniform float uGoldenCompare;
+    uniform float uGoldenDivider;
     uniform float uGoldenPhase;
     uniform float uDensity;
     uniform float uTurbulence;
@@ -222,6 +224,14 @@
       vec2 screenP = (uViewCenter - 0.5) + (screenUv - 0.5) * vec2(uViewScale * uAspect, uViewScale);
       vec2 p = screenP;
       vec2 uv = p + 0.5;
+      float goldenSignal = max(uGoldenRule, uGoldenCompare);
+      float comparisonFeather = max(0.0015, fwidth(screenUv.x) * 1.5);
+      float comparisonSide = smoothstep(
+        uGoldenDivider - comparisonFeather,
+        uGoldenDivider + comparisonFeather,
+        screenUv.x
+      ) * smoothstep(0.02, 0.72, uGoldenCompare);
+      vec4 visibleSeed = mix(uSeed, uReciprocalSeed, comparisonSide);
       float growth = smoothstep(0.02, 0.88, uAge);
       float dawn = smoothstep(0.18, 0.72, uAge);
       float detailOctave = clamp(log(max(uViewZoom, 1.0)) / log(2.0), 0.0, 7.0);
@@ -229,24 +239,28 @@
       float angularFlow = uSpin * (0.18 + length(p) * 0.48) * growth;
       p = rotate2d(angularFlow) * p;
       vec2 warp = vec2(
-        seedField(p * (1.4 + uTurbulence), uSeed),
-        seedField(p * (1.4 + uTurbulence) + 37.2, uSeed.wzyx)
+        seedField(p * (1.4 + uTurbulence), visibleSeed),
+        seedField(p * (1.4 + uTurbulence) + 37.2, visibleSeed.wzyx)
       ) - 0.5;
       p += warp * (0.08 + uTurbulence * 0.22) * growth;
 
       float localLarge = seedField(p * 2.15, uSeed);
       float sharedLarge = seedField(p * 2.15, uSharedSeed);
       float reciprocalLarge = localLarge;
-      if (uGoldenRule > 0.001) {
+      if (goldenSignal > 0.001) {
         reciprocalLarge = seedField(rotate2d(2.39996323) * (-p) * 2.15, uReciprocalSeed.wzyx);
       }
-      float largeScale = mix(localLarge, sharedLarge, uCorrelation * 0.82);
-      float smallScale = seedField(p * (5.2 + uTurbulence * 4.3), uSeed.zwxy);
-      if (uGoldenRule > 0.001) {
-        float reciprocalSmall = seedField(
+      float largeScale = mix(mix(localLarge, sharedLarge, uCorrelation * 0.82), reciprocalLarge, comparisonSide);
+      float localSmall = seedField(p * (5.2 + uTurbulence * 4.3), uSeed.zwxy);
+      float reciprocalSmall = localSmall;
+      if (goldenSignal > 0.001) {
+        reciprocalSmall = seedField(
           rotate2d(-2.39996323) * p * (5.2 + uTurbulence * 4.3),
           uReciprocalSeed.yxwz
         );
+      }
+      float smallScale = mix(localSmall, reciprocalSmall, comparisonSide);
+      if (uGoldenRule > 0.001) {
         float mutualField = clamp((localLarge + reciprocalLarge) * 0.5
           + (1.0 - abs(localLarge - reciprocalLarge)) * 0.14, 0.0, 1.0);
         largeScale = mix(largeScale, mutualField, uGoldenRule * 0.72);
@@ -254,21 +268,21 @@
       }
       float ridge = 1.0 - abs(2.0 * (largeScale * 0.68 + smallScale * 0.32) - 1.0);
       ridge = pow(clamp(ridge, 0.0, 1.0), 3.2 - uFilamentGain * 0.8);
-      float cellular = 1.0 - smoothstep(0.025, 0.24, voronoiEdge(p * (5.0 + uDensity * 3.0), uSeed));
+      float cellular = 1.0 - smoothstep(0.025, 0.24, voronoiEdge(p * (5.0 + uDensity * 3.0), visibleSeed));
       float filaments = clamp(ridge * 0.72 + cellular * 0.62, 0.0, 1.0) * growth;
 
       float subReveal = smoothstep(1.7, 7.0, uViewZoom);
-      float microA = seedField(p * (15.0 + uTurbulence * 7.0), uSeed.yxwz);
-      float microB = seedField(p * (31.0 + uDensity * 13.0) + 81.7, uSeed.wxyz);
+      float microA = seedField(p * (15.0 + uTurbulence * 7.0), visibleSeed.yxwz);
+      float microB = seedField(p * (31.0 + uDensity * 13.0) + 81.7, visibleSeed.wxyz);
       float microRidge = 1.0 - abs(2.0 * (microA * 0.68 + microB * 0.32) - 1.0);
       microRidge = pow(clamp(microRidge, 0.0, 1.0), 4.2);
-      float microCell = 1.0 - smoothstep(0.018, 0.18, voronoiEdge(p * (16.0 + uDensity * 8.0), uSeed.zwxy));
+      float microCell = 1.0 - smoothstep(0.018, 0.18, voronoiEdge(p * (16.0 + uDensity * 8.0), visibleSeed.zwxy));
       float subFilaments = clamp(microRidge * 0.74 + microCell * 0.48, 0.0, 1.0)
         * subReveal * growth * frequencyGate((31.0 + uDensity * 13.0) * 26.0);
 
       float nanoReveal = smoothstep(11.0, 42.0, uViewZoom);
-      float nanoA = seedField(p * (72.0 + uTurbulence * 29.0), uSeed.wzyx);
-      float nanoB = seedField(p * (154.0 + uDensity * 51.0) + 137.0, uSeed.zxyw);
+      float nanoA = seedField(p * (72.0 + uTurbulence * 29.0), visibleSeed.wzyx);
+      float nanoB = seedField(p * (154.0 + uDensity * 51.0) + 137.0, visibleSeed.zxyw);
       float nanoRidge = pow(clamp(1.0 - abs(nanoA - nanoB), 0.0, 1.0), 7.2)
         * nanoReveal * growth * frequencyGate((154.0 + uDensity * 51.0) * 26.0);
       filaments = clamp(filaments + subFilaments * 0.56 + nanoRidge * 0.32, 0.0, 1.0);
@@ -277,7 +291,7 @@
       float potential = 0.0;
       for (int i = 0; i < 7; i++) {
         float fi = float(i);
-        vec2 center = hash22(vec2(fi * 7.17, fi * 19.3) + uSeed.xy * 53.0) - 0.5;
+        vec2 center = hash22(vec2(fi * 7.17, fi * 19.3) + visibleSeed.xy * 53.0) - 0.5;
         float radius = 0.07 + hash21(center + fi) * 0.22 + uAge * (0.015 + 0.04 * hash21(center));
         float d = length(p - center);
         bubbleShells += exp(-abs(d - radius) * (42.0 - uVoidBias * 13.0));
@@ -302,7 +316,7 @@
 
       float dustGrid = 420.0;
       vec2 dustCell = floor(uv * dustGrid);
-      float dust = hash21(dustCell + uSeed.xy * 103.0);
+      float dust = hash21(dustCell + visibleSeed.xy * 103.0);
       float dustShape = pointKernel(fract(uv * dustGrid), 0.0, 0.08, dustGrid);
       float starThreshold = 0.996 - uDensity * 0.0015;
       float stars = step(starThreshold, dust) * dustShape * dawn * frequencyGate(dustGrid)
@@ -312,7 +326,7 @@
       float clusterReveal = smoothstep(5.0, 11.0, uViewZoom);
       float clusterGrid = 2400.0;
       vec2 clusterCell = floor(uv * clusterGrid);
-      float clusterHash = hash21(clusterCell + uSeed.zw * 619.0);
+      float clusterHash = hash21(clusterCell + visibleSeed.zw * 619.0);
       float clusterShape = pointKernel(fract(uv * clusterGrid), 0.035, 0.21, clusterGrid);
       float clusterStars = step(0.993, clusterHash) * clusterShape * clusterReveal * dawn * frequencyGate(clusterGrid)
         * smoothstep(0.22, 0.7, subFilaments + filaments * 0.48);
@@ -322,12 +336,23 @@
       float stellarReveal = smoothstep(19.0, 45.0, uViewZoom);
       float stellarGrid = 12000.0;
       vec2 stellarCell = floor(uv * stellarGrid);
-      float stellarHash = hash21(stellarCell + uSeed.xy * 1301.0);
+      float stellarHash = hash21(stellarCell + visibleSeed.xy * 1301.0);
       float stellarShape = pointKernel(fract(uv * stellarGrid), 0.025, 0.17, stellarGrid);
       float resolvedStars = step(0.9945, stellarHash) * stellarShape * stellarReveal * dawn * frequencyGate(stellarGrid)
         * smoothstep(0.28, 0.78, nanoRidge + subFilaments * 0.6);
       color += mix(vec3(0.56, 0.78, 1.0), vec3(1.0, 0.78, 0.5), hash21(stellarCell + 31.0))
         * resolvedStars * (1.6 + 2.8 * hash21(stellarCell + 101.0));
+
+      if (uGoldenCompare > 0.001) {
+        float reciprocalDifference = abs(localLarge - reciprocalLarge);
+        vec3 comparisonTint = mix(vec3(0.34, 0.72, 0.95), vec3(1.0, 0.67, 0.24), comparisonSide);
+        color = mix(color, color * comparisonTint * 1.28, uGoldenCompare * 0.18);
+        color += comparisonTint * reciprocalDifference * uGoldenCompare * 0.16;
+        float dividerGlow = exp(
+          -abs(screenUv.x - uGoldenDivider) / max(0.0018, comparisonFeather * 1.8)
+        );
+        color += vec3(1.0, 0.86, 0.46) * dividerGlow * uGoldenCompare * 0.72;
+      }
 
       if (uGoldenRule > 0.001) {
         vec2 portal = screenUv - 0.5;

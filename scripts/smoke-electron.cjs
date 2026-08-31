@@ -139,6 +139,19 @@ app.whenReady().then(async () => {
     })(),
     opticsNoticeCount: document.querySelectorAll('.screensaver-notice > .optics-mark').length,
     legacyNoticeCount: document.querySelectorAll('.screensaver-notice > i').length,
+    workspaceModes: (() => {
+      const group = document.querySelector('.view-modes');
+      const active = group?.querySelector('.mode-button.is-active');
+      const groupRect = group?.getBoundingClientRect();
+      const activeStyle = active ? getComputedStyle(active) : null;
+      return {
+        width: groupRect?.width || 0,
+        height: groupRect?.height || 0,
+        activeBorderWidth: activeStyle?.borderTopWidth,
+        activeBackgroundImage: activeStyle?.backgroundImage,
+        activeBoxShadow: activeStyle?.boxShadow
+      };
+    })(),
     versionedAssets: {
       styles: document.querySelector('link[rel="stylesheet"]')?.href.includes('?v='),
       app: [...document.scripts].some((script) => /app\\.js\\?v=/.test(script.src))
@@ -163,6 +176,7 @@ app.whenReady().then(async () => {
   let panReport = null;
   let cameraPersistenceReport = null;
   let reciprocityReport = null;
+  let reciprocityReplayReport = null;
   expect(report.canvasCount === 1, 'exactly one p5 canvas should exist');
   expect(report.engine?.sourceVisual === 'mandelbrot', 'Mandelbrot should be the default source microscope');
   expect(report.opticsMark?.count === 1 && report.opticsMark?.legacyCount === 0,
@@ -173,6 +187,12 @@ app.whenReady().then(async () => {
     'render status should be transparent outlined optics rather than a filled status dot');
   expect(report.opticsNoticeCount === 1 && report.legacyNoticeCount === 0,
     'Autogen notice should use the optics mark and no traffic-light dot');
+  expect(report.workspaceModes?.width <= 321 && report.workspaceModes?.height <= 35,
+    'workspace mode navigation should keep its compact editorial footprint');
+  expect(report.workspaceModes?.activeBorderWidth === '0px'
+    && report.workspaceModes?.activeBackgroundImage === 'none'
+    && report.workspaceModes?.activeBoxShadow === 'none',
+    'the active workspace mode should remain borderless and free of a highlighted tile');
   expect(report.versionedAssets?.styles && report.versionedAssets?.app,
     'release-critical CSS and app assets should carry cache-busting versions');
   expect(report.engine?.universeCount >= 1 || !gpuSmoke, 'draw gesture should create a universe in GPU mode');
@@ -453,17 +473,27 @@ app.whenReady().then(async () => {
         await new Promise(resolve => setTimeout(resolve, 32));
       }
     })()`);
-    await new Promise((resolve) => setTimeout(resolve, 1650));
+    // Capture the held split after the reveal has reached center, not the
+    // opening edge of the wipe, so visual regressions show both fields clearly.
+    await new Promise((resolve) => setTimeout(resolve, 2850));
     reciprocityReport = await window.webContents.executeJavaScript(`(() => {
       const engine = window.ButterflyFXDiagnostics.status();
       const signal = document.querySelector('#reciprocity-signal');
+      const cinematic = document.querySelector('#reciprocity-cinematic');
       return {
         ...engine,
         selectedSeed: document.querySelector('#hud-seed')?.textContent,
         signalVisible: Boolean(signal && !signal.hidden),
         signalPair: document.querySelector('#reciprocity-pair')?.textContent,
+        signalCosmosOffset: signal ? parseFloat(signal.style.left || '0') - engine.layout.cosmos.x : null,
+        universeStageLabelVisibility: getComputedStyle(document.querySelector('.universe-stage-label')).visibility,
         hudGolden: document.querySelector('#screensaver-hud')?.classList.contains('is-golden'),
         bodyGolden: document.body.classList.contains('golden-rule-mode'),
+        cinematicVisible: Boolean(cinematic && !cinematic.hidden),
+        cinematicPhase: cinematic?.dataset.phase,
+        cinematicChapter: document.querySelector('#reciprocity-phase')?.textContent,
+        cinematicOriginal: document.querySelector('#reciprocity-original-seed')?.textContent,
+        cinematicCounterpart: document.querySelector('#reciprocity-counterpart-seed')?.textContent,
         statusText: document.querySelector('#screensaver-status')?.textContent
       };
     })()`);
@@ -474,11 +504,43 @@ app.whenReady().then(async () => {
       'the reciprocity field should expose a deterministic counterfactual');
     expect(reciprocityReport.signalVisible && reciprocityReport.hudGolden && reciprocityReport.bodyGolden,
       'the reciprocity field should expose its secret visual state');
-    expect(/RECIPROCITY/i.test(reciprocityReport.statusText || ''), 'the Autogen HUD should identify reciprocity while it is active');
+    expect(Math.abs(reciprocityReport.signalCosmosOffset - 18) < 0.1
+      && reciprocityReport.universeStageLabelVisibility === 'hidden',
+      'the field badge should align to the cosmos pane without colliding with its ordinary stage label');
+    expect(reciprocityReport.cinematicVisible && ['comparison', 'fusion'].includes(reciprocityReport.cinematicPhase),
+      'the per-universe cinematic should visibly advance from the original into comparison');
+    expect(reciprocityReport.cinematicOriginal === reciprocityReport.selectedSeed
+      && reciprocityReport.cinematicCounterpart === reciprocityReport.reciprocalSeed,
+      'the cinematic should label both sides of the current deterministic pair');
+    expect(/RECIPROCITY.*II RECIPROCAL REVEAL/i.test(reciprocityReport.statusText || ''),
+      'the Autogen HUD should stay synchronized with the cinematic comparison phase');
     if (gpuSmoke) {
       const reciprocityImage = await window.webContents.capturePage();
       await fs.writeFile(reciprocityScreenshotPath, reciprocityImage.toPNG());
     }
+    reciprocityReplayReport = await window.webContents.executeJavaScript(`(async () => {
+      const previous = window.ButterflyFXDiagnostics.status();
+      const generatedId = window.ButterflyFXDiagnostics.generateScreensaverUniverse();
+      await new Promise(resolve => setTimeout(resolve, 120));
+      const current = window.ButterflyFXDiagnostics.status();
+      const cinematic = document.querySelector('#reciprocity-cinematic');
+      return {
+        previousUniverseId: previous.selectedUniverseId,
+        generatedId,
+        selectedUniverseId: current.selectedUniverseId,
+        transitionUniverseId: current.goldenRuleTransitionUniverseId,
+        phase: current.goldenRulePhase,
+        cinematicPhase: cinematic?.dataset.phase,
+        cinematicVisible: Boolean(cinematic && !cinematic.hidden)
+      };
+    })()`);
+    expect(reciprocityReplayReport.generatedId !== reciprocityReplayReport.previousUniverseId
+      && reciprocityReplayReport.transitionUniverseId === reciprocityReplayReport.generatedId,
+      'each newly generated universe should receive its own reciprocal transition');
+    expect(reciprocityReplayReport.phase === 'original'
+      && reciprocityReplayReport.cinematicPhase === 'original'
+      && reciprocityReplayReport.cinematicVisible,
+      'the per-universe cinematic should restart on the untouched original field');
     await window.webContents.executeJavaScript(`(async () => {
       for (const key of 'goldenrule') {
         window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
@@ -504,6 +566,7 @@ app.whenReady().then(async () => {
     panReport,
     screensaverReport,
     reciprocityReport,
+    reciprocityReplayReport,
     cameraPersistenceReport,
     compositionReport,
     errors: [...errors],

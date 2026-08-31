@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Butterfly FX — Universe Loom</title>
-  <link rel="stylesheet" href="./styles.css?v=observatory-20260831b">
+  <link rel="stylesheet" href="./styles.css?v=observatory-20260831c">
 </head>
 <body>
   <div class="app-shell">
@@ -212,6 +212,26 @@
             <span>φ / RECIPROCITY FIELD</span>
             <b id="reciprocity-pair">AWAITING COUNTERFACTUAL</b>
             <small>THE OTHER BECOMES THE INITIAL CONDITION</small>
+          </div>
+        </div>
+
+        <div class="reciprocity-cinematic" id="reciprocity-cinematic" data-phase="idle" hidden aria-hidden="true">
+          <div class="reciprocity-cinematic-flare"></div>
+          <div class="reciprocity-cinematic-comparison">
+            <div class="reciprocity-cinematic-label is-original">
+              <span>I / ORIGINAL</span>
+              <b id="reciprocity-original-seed">AWAITING</b>
+            </div>
+            <div class="reciprocity-cinematic-label is-counterpart">
+              <span>II / RECIPROCAL</span>
+              <b id="reciprocity-counterpart-seed">AWAITING</b>
+            </div>
+            <i class="reciprocity-cinematic-divider"></i>
+          </div>
+          <div class="reciprocity-cinematic-chapter">
+            <span id="reciprocity-phase">I · ORIGINAL FIELD</span>
+            <b id="reciprocity-phase-detail">OBSERVE THE INITIAL CONDITION</b>
+            <i><b></b></i>
           </div>
         </div>
       </section>
@@ -444,8 +464,8 @@ dz/dt = xy − βz</pre>
 
   <script src="./vendor/p5.min.js"></script>
   <script src="./simulation.js"></script>
-  <script src="./shaders.js"></script>
+  <script src="./shaders.js?v=observatory-20260831c"></script>
   <script src="./buddhabrot.js"></script>
-  <script src="./app.js?v=observatory-20260831b"></script>
+  <script src="./app.js?v=observatory-20260831c"></script>
 </body>
 </html>
