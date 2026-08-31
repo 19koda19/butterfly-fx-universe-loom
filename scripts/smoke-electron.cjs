@@ -179,6 +179,7 @@ app.whenReady().then(async () => {
   let reciprocityReport = null;
   let reciprocityFusionReport = null;
   let reciprocitySettledReport = null;
+  let reciprocityTourReport = null;
   let reciprocityReplayReport = null;
   expect(report.canvasCount === 1, 'exactly one p5 canvas should exist');
   expect(report.engine?.sourceVisual === 'mandelbrot', 'Mandelbrot should be the default source microscope');
@@ -367,6 +368,7 @@ app.whenReady().then(async () => {
       await new Promise((resolve) => setTimeout(resolve, 1900));
       zoomReport = await window.webContents.executeJavaScript(`({
         camera: window.ButterflyFXDiagnostics.status().universeCamera,
+        selectedUniverseId: window.ButterflyFXDiagnostics.status().selectedUniverseId,
         focusView: window.ButterflyFXDiagnostics.status().focusView,
         inspectedGalaxy: window.ButterflyFXDiagnostics.status().inspectedGalaxy,
         label: document.querySelector('#cosmos-zoom-level')?.textContent,
@@ -382,6 +384,8 @@ app.whenReady().then(async () => {
       annularReport = zoomReport;
       expect(zoomReport.camera.zoom > 20, 'odd-galaxy inspector should dive beyond 20x');
       expect(Boolean(zoomReport.camera.inspectId), 'odd-galaxy inspector should identify a galaxy');
+      expect(zoomReport.camera.inspectUniverseId === zoomReport.selectedUniverseId,
+        'odd-galaxy inspector should retain the selected field identity');
       expect(/TENSION/i.test(zoomReport.target || ''), 'zoom panel should expose formation tension explicitly');
       expect(zoomReport.inspectedGalaxy?.id === zoomReport.camera.inspectId, 'annular inspector diagnostics should match the camera target');
       expect(zoomReport.inspectedGalaxy?.morphology?.family === 'ANNULAR', 'INSPECT STRANGE RING should target a generated annular galaxy');
@@ -562,6 +566,22 @@ app.whenReady().then(async () => {
       && reciprocitySettledReport.cosmosFramePasses[0].role === 'mutual'
       && reciprocitySettledReport.cosmosFramePasses[0].universeId === reciprocitySettledReport.mutualUniverseId,
       'the settled transformation should remain a distinct deterministic mutual universe');
+    reciprocityTourReport = await window.webContents.executeJavaScript(`(() => {
+      const tourTarget = window.ButterflyFXDiagnostics.tourUniverseCamera();
+      const engine = window.ButterflyFXDiagnostics.status();
+      return { ...engine, tourTarget };
+    })()`);
+    expect(reciprocityTourReport.tourTarget?.universeId === reciprocityTourReport.mutualUniverseId
+      && reciprocityTourReport.activeCosmosUniverseId === reciprocityTourReport.mutualUniverseId
+      && reciprocityTourReport.screensaverTourUniverseId === reciprocityTourReport.mutualUniverseId
+      && reciprocityTourReport.universeCamera.inspectUniverseId === reciprocityTourReport.mutualUniverseId
+      && reciprocityTourReport.inspectedGalaxy?.universeId === reciprocityTourReport.mutualUniverseId,
+      'the settled camera tour should target the rendered mutual field instead of the source field');
+    expect(reciprocityTourReport.tourTarget?.galaxyId === reciprocityTourReport.universeCamera.inspectId
+      && reciprocityTourReport.tourTarget.galaxyId === reciprocityTourReport.inspectedGalaxy?.id
+      && Math.abs(reciprocityTourReport.tourTarget.x - reciprocityTourReport.inspectedGalaxy.x) < 1e-12
+      && Math.abs(reciprocityTourReport.tourTarget.y - reciprocityTourReport.inspectedGalaxy.y) < 1e-12,
+      'the camera target coordinates and tension diagnostics should resolve the same mutual galaxy');
     reciprocityReplayReport = await window.webContents.executeJavaScript(`(async () => {
       const previous = window.ButterflyFXDiagnostics.status();
       const generatedId = window.ButterflyFXDiagnostics.generateScreensaverUniverse();
@@ -574,6 +594,11 @@ app.whenReady().then(async () => {
         selectedUniverseId: current.selectedUniverseId,
         transitionUniverseId: current.goldenRuleTransitionUniverseId,
         phase: current.goldenRulePhase,
+        camera: current.universeCamera,
+        cameraStep: current.screensaverCameraStep,
+        tourUniverseId: current.screensaverTourUniverseId,
+        fractalHome: current.screensaverFractalHome,
+        fractalTarget: current.screensaverFractalTarget,
         cinematicPhase: cinematic?.dataset.phase,
         cinematicVisible: Boolean(cinematic && !cinematic.hidden)
       };
@@ -585,6 +610,15 @@ app.whenReady().then(async () => {
       && reciprocityReplayReport.cinematicPhase === 'original'
       && reciprocityReplayReport.cinematicVisible,
       'the per-universe cinematic should restart on the untouched original field');
+    expect(reciprocityReplayReport.cameraStep === 0
+      && !reciprocityReplayReport.tourUniverseId
+      && !reciprocityReplayReport.camera.inspectId
+      && !reciprocityReplayReport.camera.inspectUniverseId
+      && reciprocityReplayReport.camera.targetScale === 1
+      && reciprocityReplayReport.fractalTarget.x === reciprocityReplayReport.fractalHome.x
+      && reciprocityReplayReport.fractalTarget.y === reciprocityReplayReport.fractalHome.y
+      && reciprocityReplayReport.fractalTarget.scale === reciprocityReplayReport.fractalHome.scale,
+      'a new transition should clear the previous field tour and reframe both views');
     await window.webContents.executeJavaScript(`(async () => {
       for (const key of 'goldenrule') {
         window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
@@ -592,8 +626,10 @@ app.whenReady().then(async () => {
       }
     })()`);
     await new Promise((resolve) => setTimeout(resolve, 120));
-    const toggledOff = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status().goldenRuleActive`);
-    expect(!toggledOff, 'typing goldenrule again should release the reciprocity field');
+    const toggledOff = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    expect(!toggledOff.goldenRuleActive, 'typing goldenrule again should release the reciprocity field');
+    expect(!toggledOff.universeCamera.inspectId && !toggledOff.universeCamera.inspectUniverseId,
+      'releasing the transformed field should clear its camera target');
     await window.webContents.executeJavaScript(`document.querySelector('#screensaver-exit').click()`);
     await new Promise((resolve) => setTimeout(resolve, 350));
   } catch (error) {
@@ -612,6 +648,7 @@ app.whenReady().then(async () => {
     reciprocityReport,
     reciprocityFusionReport,
     reciprocitySettledReport,
+    reciprocityTourReport,
     reciprocityReplayReport,
     cameraPersistenceReport,
     compositionReport,
