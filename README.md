@@ -19,9 +19,9 @@ The same app runs as a static browser edition for GitHub Pages.
 - A violet → cyan → amber → white order/“negentropy” proxy. It measures organization inside this model, not negative thermodynamic entropy.
 - Five annular morphology channels—collisional, polar, resonance, Hoag-like, and deliberately unresolved—whose visible rings remain distinct from the model potential behind them.
 - An optional magenta `Formation Tension` diagnostic that calls out galaxy proxies whose mass, birth time, ring support, halo alignment, spiral order, turbulence, spin, or thermal state strain the toy model’s own causal mapping. It is not a real-world impossibility score.
-- `Both`, `Source`, and `Universe` compositions plus a fullscreen Autogen screensaver that continually draws, births, evolves, and archives new worlds. Its default dual-pane choreography dives into a contributing source coordinate and an unusual galaxy about every five seconds, then reframes both. Mandelbrot remains the default microscope and its tour favors long-escape, high-contrast boundary points; an explicitly selected Buddhabrot remains selected instead.
+- `Both`, `Source`, and `Universe` compositions plus a fullscreen Autogen screensaver that continually draws, births, evolves, and archives new worlds. Spacetime Flow stays engaged throughout Autogen and returns to the prior motion choice on exit. Its default dual-pane choreography dives into a contributing source coordinate and an unusual galaxy about every five seconds, then reframes both. Mandelbrot remains the default microscope and its tour favors long-escape, high-contrast boundary points; an explicitly selected Buddhabrot remains selected instead.
 - Model-time playback, layer controls, archive cards, PNG capture, and portable JSON genome bottles.
-- A separate `SPACETIME` flow control that runs a pauseable 32-second conformal Mandelbrot lens and drives bounded, deterministic field advection, galaxy spin, local epicycles, halo precession, breathing, and satellite orbits from one shared phase.
+- An automatic, pauseable `SPACETIME` flow that gracefully winds up with each new universe. Its 32-second conformal Mandelbrot lens drives bounded, deterministic field advection, galaxy spin, local epicycles, halo precession, breathing, and satellite orbits from one shared phase; an explicit pause remains sticky across later births.
 - Live WebGL/Electron diagnostics, context-loss handling, and a usable CPU Safe Preview when WebGL is unavailable.
 - An in-app science manual that distinguishes measured mathematics, invented mappings, physics-inspired approximations, emergent output, and the boundary of the claim.
 
@@ -158,11 +158,11 @@ Open <http://127.0.0.1:4173>. The browser edition keeps creation, comparison, fu
 | `F` | Restore the active source frame |
 | `+` / `−` / `0` | Dive / retreat / frame the universe camera |
 | `Space` | Play or pause model time |
-| `T` | Start or pause the continuous 32-second Spacetime Flow cycle |
+| `T` | Pause or resume the continuous 32-second Spacetime Flow cycle |
 | `Ctrl/Cmd + Z` | Remove the latest unignited strand |
 | `Escape` | Leave Autogen/fullscreen or close a dialog |
 
-The top-right `VIEW` control cycles between the relational split view, a full source microscope, and a full universe. `AUTOGEN ⛶` opens the configurable screensaver. The `SPACETIME` button beside the model-age readout controls continuous motion independently of the one-way emergence timeline. With reduced motion enabled at the operating-system level, its deformation is capped at 30%, its phase runs at one-fifth speed, and winding rotations become gentle oscillations. `MODEL POTENTIAL` toggles the thin cyan toy-potential contours. `FORMATION TENSION` toggles the magenta diagnostic, while `INSPECT STRANGE RING` targets the selected universe’s highest-tension annular system and opens it at galaxy scale.
+The top-right `VIEW` control cycles between the relational split view, a full source microscope, and a full universe. `AUTOGEN ⛶` opens the configurable screensaver and temporarily guarantees continuous motion. New universes ease into Spacetime Flow by default; the `SPACETIME` button beside the model-age readout pauses or resumes that motion independently of the one-way emergence timeline, and an explicit pause carries across later births. With reduced motion enabled at the operating-system level, its deformation is capped at 30%, its phase runs at one-fifth speed, and winding rotations become gentle oscillations. `MODEL POTENTIAL` toggles the thin cyan toy-potential contours. `FORMATION TENSION` toggles the magenta diagnostic, while `INSPECT STRANGE RING` targets the selected universe’s highest-tension annular system and opens it at galaxy scale.
 
 ## Test and package
 

@@ -210,10 +210,13 @@ app.whenReady().then(async () => {
     && report.workspaceModes?.activeBackgroundImage === 'none'
     && report.workspaceModes?.activeBoxShadow === 'none',
     'the active workspace mode should remain borderless and free of a highlighted tile');
+  const hasBornUniverse = Boolean(report.engine?.universeCount);
   expect(report.spacetimeControl?.count === 1
-    && report.spacetimeControl?.pressed === 'false'
-    && report.spacetimeControl?.status === 'STILL',
-    'Spacetime Flow should expose one still, unpressed control at startup');
+    && report.engine?.spacetimeUserPaused === false
+    && report.engine?.spacetimeActive === hasBornUniverse
+    && report.spacetimeControl?.pressed === String(hasBornUniverse)
+    && report.spacetimeControl?.status === (hasBornUniverse ? 'FLOWING' : 'STILL'),
+    'Spacetime Flow should default to motion as soon as the first universe is born');
   expect(report.spacetimeControl?.width > 80 && report.spacetimeControl?.height >= 27,
     'Spacetime Flow should retain a legible pointer target in the model-time ribbon');
   expect(report.versionedAssets?.styles && report.versionedAssets?.app,
@@ -598,8 +601,8 @@ app.whenReady().then(async () => {
       'the settled camera tour should target the rendered mutual field instead of the source field');
     expect(reciprocityTourReport.tourTarget?.galaxyId === reciprocityTourReport.universeCamera.inspectId
       && reciprocityTourReport.tourTarget.galaxyId === reciprocityTourReport.inspectedGalaxy?.id
-      && Math.abs(reciprocityTourReport.tourTarget.x - reciprocityTourReport.inspectedGalaxy.x) < 1e-12
-      && Math.abs(reciprocityTourReport.tourTarget.y - reciprocityTourReport.inspectedGalaxy.y) < 1e-12,
+      && Math.abs(reciprocityTourReport.tourTarget.x - reciprocityTourReport.inspectedGalaxy.flowX) < 1e-12
+      && Math.abs(reciprocityTourReport.tourTarget.y - reciprocityTourReport.inspectedGalaxy.flowY) < 1e-12,
       'the camera target coordinates and tension diagnostics should resolve the same mutual galaxy');
     reciprocityReplayReport = await window.webContents.executeJavaScript(`(async () => {
       const previous = window.ButterflyFXDiagnostics.status();
@@ -655,7 +658,127 @@ app.whenReady().then(async () => {
     errors.add(`Reciprocity smoke failed: ${error.message}`);
   }
   try {
-    const beforeFlow = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    const autoFlowStart = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 45; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const autoFlowReady = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 12; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const autoFlowEnd = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    const defaultMotionDelta = autoFlowReady.selectedMotionSample && autoFlowEnd.selectedMotionSample
+      ? Math.hypot(
+        autoFlowEnd.selectedMotionSample.x - autoFlowReady.selectedMotionSample.x,
+        autoFlowEnd.selectedMotionSample.y - autoFlowReady.selectedMotionSample.y
+      ) + Math.abs(autoFlowEnd.selectedMotionSample.rotation - autoFlowReady.selectedMotionSample.rotation)
+      : 0;
+    expect(Boolean(autoFlowStart.selectedUniverseId)
+      && autoFlowStart.spacetimeActive
+      && !autoFlowStart.spacetimeUserPaused,
+    'a universe born without an explicit pause should remain in default Spacetime Flow');
+    expect(autoFlowReady.spacetimeStrength > 0.99
+      && autoFlowEnd.spacetimeTime > autoFlowReady.spacetimeTime
+      && defaultMotionDelta > 1e-5,
+      'default Spacetime Flow should advance both temporal phase and a sampled galaxy pose');
+
+    await window.webContents.executeJavaScript(`document.querySelector('#spacetime-button').click()`);
+    const defaultPauseStart = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 55; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const stickyPause = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 12; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const pausedStable = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    expect(!stickyPause.spacetimeActive
+      && stickyPause.spacetimeUserPaused
+      && stickyPause.spacetimeStrength < 0.015
+      && stickyPause.spacetimeTime === defaultPauseStart.spacetimeTime
+      && pausedStable.spacetimeTime === stickyPause.spacetimeTime,
+    'an explicit pause should ease to stillness and freeze the shared phase');
+
+    const pausedUniverseId = pausedStable.selectedUniverseId;
+    await window.webContents.executeJavaScript(`document.querySelector('#fork-button').click()`);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const stickyBirth = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    expect(stickyBirth.selectedUniverseId !== pausedUniverseId
+      && !stickyBirth.spacetimeActive
+      && stickyBirth.spacetimeUserPaused
+      && stickyBirth.spacetimeTime === pausedStable.spacetimeTime,
+    'new universes should respect a deliberate sticky pause');
+
+    await window.webContents.executeJavaScript(`(() => {
+      document.querySelector('#screensaver-button').click();
+      document.querySelector('[data-screen-view="universe"]').click();
+      document.querySelector('#start-screensaver').click();
+    })()`);
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 45; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const autogenFlowStart = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 12; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const autogenFlowEnd = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    const autogenMotionDelta = autogenFlowStart.selectedMotionSample && autogenFlowEnd.selectedMotionSample
+      ? Math.hypot(
+        autogenFlowEnd.selectedMotionSample.x - autogenFlowStart.selectedMotionSample.x,
+        autogenFlowEnd.selectedMotionSample.y - autogenFlowStart.selectedMotionSample.y
+      ) + Math.abs(autogenFlowEnd.selectedMotionSample.rotation - autogenFlowStart.selectedMotionSample.rotation)
+      : 0;
+    expect(autogenFlowStart.screensaverActive
+      && autogenFlowStart.spacetimeActive
+      && autogenFlowStart.spacetimeAutogenForced
+      && autogenFlowStart.spacetimeStrength > 0.99,
+    'Autogen should force a previously paused universe into fully eased Spacetime Flow');
+    expect(autogenFlowEnd.spacetimeTime > autogenFlowStart.spacetimeTime && autogenMotionDelta > 1e-5,
+      'Autogen should keep its generated galaxies moving through the shared phase');
+    await window.webContents.executeJavaScript(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', bubbles: true, cancelable: true }))`);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const autogenAfterToggle = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    expect(autogenAfterToggle.spacetimeActive && autogenAfterToggle.spacetimeAutogenForced,
+      'Autogen should not allow its guaranteed motion to be paused mid-run');
+
+    await window.webContents.executeJavaScript(`document.querySelector('#screensaver-exit').click()`);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const restoreStart = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 55; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const restoredPause = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    expect(!restoredPause.screensaverActive
+      && !restoredPause.spacetimeActive
+      && restoredPause.spacetimeUserPaused
+      && !restoredPause.spacetimeAutogenForced
+      && restoredPause.spacetimeStrength < 0.015
+      && restoredPause.spacetimeTime === restoreStart.spacetimeTime,
+    'leaving Autogen should restore the prior pause and preserve its temporal phase');
+
+    const beforeFlow = restoredPause;
     await window.webContents.executeJavaScript(`document.querySelector('#spacetime-button').click()`);
     await window.webContents.executeJavaScript(`(async () => {
       for (let frame = 0; frame < 4; frame += 1) {
@@ -735,8 +858,28 @@ app.whenReady().then(async () => {
         status: document.querySelector('#spacetime-status')?.textContent
       };
     })()`);
-    spacetimeReport = { beforeFlow, ramping, flowing, pauseStart, easing, settled, beforeClear, afterClear };
-    expect(Boolean(beforeFlow.selectedUniverseId), 'Spacetime Flow smoke should begin with a selected universe');
+    spacetimeReport = {
+      autoFlowStart,
+      autoFlowReady,
+      autoFlowEnd,
+      stickyPause,
+      pausedStable,
+      stickyBirth,
+      autogenFlowStart,
+      autogenFlowEnd,
+      autogenAfterToggle,
+      restoredPause,
+      beforeFlow,
+      ramping,
+      flowing,
+      pauseStart,
+      easing,
+      settled,
+      beforeClear,
+      afterClear
+    };
+    expect(Boolean(beforeFlow.selectedUniverseId) && beforeFlow.spacetimeUserPaused,
+      'explicit Spacetime Flow smoke should begin with a selected, deliberately paused universe');
     expect(ramping.spacetimeActive
       && ramping.spacetimeStrength > 0 && ramping.spacetimeStrength < 1
       && ramping.spacetimeTime === beforeFlow.spacetimeTime,

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Butterfly FX — Universe Loom</title>
-  <link rel="stylesheet" href="./styles.css?v=spacetime-20260901a">
+  <link rel="stylesheet" href="./styles.css?v=motion-20260901b">
 </head>
 <body>
   <div class="app-shell">
@@ -201,7 +201,7 @@
         </div>
 
         <div class="screensaver-hud" id="screensaver-hud" hidden>
-          <div><span>AUTOGEN / COSMIC SCREENSAVER</span><b id="screensaver-status">NEXT GENOME IN 20s</b></div>
+          <div><span>AUTOGEN / SPACETIME FLOW</span><b id="screensaver-status">NEXT GENOME IN 20s</b></div>
           <button id="screensaver-cycle-view" title="Cycle screensaver composition">BOTH</button>
           <button id="screensaver-exit">EXIT <kbd>ESC</kbd></button>
         </div>
@@ -295,7 +295,7 @@
       <div class="epoch-track">
         <div class="epoch-heading">
           <span>MODEL TIME / EMERGENCE</span>
-          <button type="button" class="spacetime-button" id="spacetime-button" aria-label="Start Spacetime Flow" aria-pressed="false" title="Animate the time-extended Mandelbrot family and its universe (T)">
+          <button type="button" class="spacetime-button" id="spacetime-button" aria-label="Start Spacetime Flow" aria-pressed="false" title="Pause or resume the time-extended Mandelbrot family and its universe (T)">
             <i aria-hidden="true"><b></b></i>
             <span>SPACETIME</span>
             <output id="spacetime-status">STILL</output>
@@ -423,7 +423,7 @@ dz/dt = xy − βz</pre>
       <li><i>01</i><div><b>CHOOSE A SOURCE MICROSCOPE</b><p>Mandelbrot maps which starts escape; Buddhabrot progressively maps where escaped trajectories travel. They share a numbered complex grid, though their pixels mean different things.</p></div></li>
       <li><i>02</i><div><b>DRAW THROUGH IT</b><p>Drag a line across the boundary. Branch mode ignites on release; Weave mode lets several strands interfere.</p></div></li>
       <li><i>03</i><div><b>LET STRUCTURE EMERGE</b><p>Play model time. Watch density collect into contours, filaments, halo knots, and luminous galaxies.</p></div></li>
-      <li><i>04</i><div><b>LET IT FLOW THROUGH TIME</b><p>Choose Spacetime Flow in the model-time ribbon, or press T. One shared mathematical phase reshapes the source family while the field, galaxies, rings, and satellites move together.</p></div></li>
+      <li><i>04</i><div><b>LET IT FLOW THROUGH TIME</b><p>By default, each new universe eases into Spacetime Flow automatically. Use the model-time ribbon or press T to pause and resume the shared mathematical phase that reshapes the source family while the field, galaxies, rings, and satellites move together; your pause remains in place for later births.</p></div></li>
       <li><i>05</i><div><b>DIVE INTO THE CONSEQUENCE</b><p>Scroll or double-click over the universe, then drag to roam. Deeper scales resolve galaxy arms, luminous rings, stellar knots, cyan potential contours, and magenta formation-tension flags.</p></div></li>
     </ol>
     <div class="shortcut-grid">
@@ -453,7 +453,7 @@ dz/dt = xy − βz</pre>
       <button class="dialog-close icon-button" aria-label="Close screensaver setup">×</button>
     </div>
     <div class="screensaver-copy">
-      <p>The instrument will draw new deterministic genomes, evolve their universes, and continue until you press Escape. Every generated branch remains in the archive. About every five seconds, it favors an unusual ring or high-tension galaxy before reframing. In BOTH mode the two cameras move together: the left revisits a coordinate that fed the genome while the right dives into one consequence of that recipe. Mandelbrot is the default and its tour favors intricate boundary points; Buddhabrot is used only when you choose it.</p>
+      <p>The instrument will draw new deterministic genomes, evolve their universes, and continue until you press Escape. Spacetime Flow stays engaged throughout Autogen, then returns to your prior paused or moving choice. Every generated branch remains in the archive. About every five seconds, it favors an unusual ring or high-tension galaxy before reframing. In BOTH mode the two cameras move together: the left revisits a coordinate that fed the genome while the right dives into one consequence of that recipe. Mandelbrot is the default and its tour favors intricate boundary points; Buddhabrot is used only when you choose it.</p>
       <span class="screen-option-label">FULLSCREEN COMPOSITION</span>
       <div class="screen-view-options" role="group" aria-label="Screensaver composition">
         <button class="screen-view-option is-active" data-screen-view="both" aria-pressed="true"><i>◫</i><b>BOTH</b><span>cause + consequence</span></button>
@@ -473,9 +473,9 @@ dz/dt = xy − βz</pre>
   <div class="sr-only" id="live-region" aria-live="polite"></div>
 
   <script src="./vendor/p5.min.js"></script>
-  <script src="./simulation.js?v=spacetime-20260901a"></script>
-  <script src="./shaders.js?v=spacetime-20260901a"></script>
+  <script src="./simulation.js?v=motion-20260901b"></script>
+  <script src="./shaders.js?v=motion-20260901b"></script>
   <script src="./buddhabrot.js"></script>
-  <script src="./app.js?v=spacetime-20260901a"></script>
+  <script src="./app.js?v=motion-20260901b"></script>
 </body>
 </html>

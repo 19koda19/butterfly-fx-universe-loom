@@ -86,6 +86,7 @@
     playing: false,
     spacetime: {
       active: false,
+      userPaused: false,
       time: 0,
       strength: 0,
       rampFrom: 0,
@@ -122,6 +123,7 @@
       fractalHome: null,
       fractalTarget: null,
       previousFocus: 'both',
+      previousSpacetimeActive: null,
       generationCount: 0,
       secretBuffer: '',
       secretKeyAt: 0,
@@ -1021,14 +1023,21 @@
     });
     state.universes.push(universe);
     selectUniverse(universe, { preserveComparison: options.preserveComparison });
+    const easedIntoMotion = !state.spacetime.active && !state.spacetime.userPaused;
+    if (easedIntoMotion) {
+      beginSpacetimeTransition(true);
+      updateSpacetimeUI();
+    }
     state.age = options.age ?? 0.04;
     state.playing = true;
     $('#play-button').classList.add('is-playing');
     $('#empty-callout').classList.add('is-hidden');
     updateAgeUI();
     renderArchive();
-    announce(`${universe.name} created from ${universe.strands.length} ${universe.strands.length === 1 ? 'strand' : 'strands'}.`);
-    showToast(`${universe.name} is alive · genome ${universe.genome.seedHex}.`);
+    announce(`${universe.name} created from ${universe.strands.length} ${universe.strands.length === 1 ? 'strand' : 'strands'}.${easedIntoMotion ? ' Spacetime Flow is easing in; press T to pause.' : ''}`);
+    showToast(easedIntoMotion
+      ? `${universe.name} is alive and easing into motion · T pauses.`
+      : `${universe.name} is alive · genome ${universe.genome.seedHex}.`);
     return universe;
   }
 
@@ -1351,7 +1360,14 @@
 
   async function startScreensaver() {
     if (state.screensaver.active) return;
+    // Autogen is an explicitly cinematic mode: keep its cosmos moving, then
+    // restore the user's prior choice without restarting the shared phase.
+    state.screensaver.previousSpacetimeActive = state.selected
+      ? state.spacetime.active
+      : !state.spacetime.userPaused;
     state.screensaver.active = true;
+    beginSpacetimeTransition(true);
+    updateSpacetimeUI();
     state.screensaver.previousFocus = state.focusView;
     state.screensaver.view = $('.screen-view-option.is-active')?.dataset.screenView || 'both';
     state.screensaver.interval = Number($('#screensaver-interval').value);
@@ -1376,13 +1392,17 @@
     }
     resizeInstrument();
     if (state.screensaver.active) autoGenerateUniverse();
-    announce('Autogenerate screensaver started. Press Escape to return to the laboratory.');
+    announce('Autogenerate screensaver started with Spacetime Flow engaged. Press Escape to return to the laboratory.');
   }
 
   async function stopScreensaver(exitFullscreen = true) {
     if (!state.screensaver.active) return;
     if (state.screensaver.goldenRule.active) setGoldenRuleActive(false);
+    const previousSpacetimeActive = state.screensaver.previousSpacetimeActive;
+    state.screensaver.previousSpacetimeActive = null;
     state.screensaver.active = false;
+    beginSpacetimeTransition(Boolean(previousSpacetimeActive && state.selected));
+    updateSpacetimeUI();
     state.screensaver.nextAt = Infinity;
     state.screensaver.nextCameraAt = Infinity;
     state.screensaver.secretBuffer = '';
@@ -1674,6 +1694,10 @@
   }
 
   function toggleSpacetimeFlow() {
+    if (state.screensaver.active) {
+      showToast('Autogen keeps Spacetime Flow moving · press Escape to return to manual control.');
+      return;
+    }
     const activating = !state.spacetime.active;
     if (activating && !state.selected) {
       showToast('Draw a path before sending a universe through spacetime.');
@@ -1683,6 +1707,7 @@
       setSourceVisual('mandelbrot', { quiet: true });
     }
     beginSpacetimeTransition(activating);
+    state.spacetime.userPaused = !activating;
     updateSpacetimeUI();
     if (activating) {
       showToast('Spacetime Flow engaged · one phase now bends the Mandelbrot lens, field, galaxies, rings, and satellites.', 5200);
@@ -3014,8 +3039,8 @@
             $('#screensaver-status').textContent = state.screensaver.goldenRule.active
               ? goldenRuleStatusText(goldenCinematic)
               : (remaining === null
-                ? 'INITIALIZING FIRST GENOME…'
-                : `NEXT GENOME IN ${remaining}s · ${depthLabel} ${depth < 10 ? depth.toFixed(1) : Math.round(depth)}× · ${state.universes.length} BOTTLED`);
+                ? 'SPACETIME FLOW · INITIALIZING FIRST GENOME…'
+                : `SPACETIME FLOW · NEXT GENOME IN ${remaining}s · ${depthLabel} ${depth < 10 ? depth.toFixed(1) : Math.round(depth)}× · ${state.universes.length} BOTTLED`);
           }
         }
         if (state.playing && state.selected && !state.contextLost) {
@@ -3526,6 +3551,8 @@
       const inspectedUniverse = cameraInspectionUniverse(now);
       const inspected = inspectedUniverse?.galaxies.find((galaxy) => galaxy.id === state.cosmosCamera.inspectId) || null;
       const inspectedPose = inspected ? galaxyPose(inspectedUniverse, inspected) : null;
+      const motionGalaxy = state.selected?.galaxies?.[0] || null;
+      const motionPose = motionGalaxy ? galaxyPose(state.selected, motionGalaxy) : null;
       return ({
       webglReady: state.webglReady,
       webgl2: state.webgl2,
@@ -3547,12 +3574,16 @@
       emergencePlaying: state.playing,
       reducedMotion: state.reducedMotion,
       spacetimeActive: state.spacetime.active,
+      spacetimeUserPaused: state.spacetime.userPaused,
       spacetimeTime: state.spacetime.time,
       spacetimePhase: spacetimePhase(),
       spacetimeStrength: state.spacetime.strength,
       spacetimeVisualStrength: visualSpacetimeStrength(),
       spacetimeCycleSeconds: SPACETIME_CYCLE_SECONDS,
       screensaverActive: state.screensaver.active,
+      spacetimeAutogenForced: state.screensaver.active
+        && state.screensaver.previousSpacetimeActive === false,
+      screensaverPreviousSpacetimeActive: state.screensaver.previousSpacetimeActive,
       screensaverView: state.screensaver.view,
       screensaverGenerationCount: state.screensaver.generationCount,
       screensaverCameraStep: state.screensaver.cameraStep,
@@ -3581,6 +3612,12 @@
       archiveIds: state.universes.map((universe) => universe.id),
       selectedPointCount: state.selected?.strands?.[0]?.points?.length || 0,
       selectedPointHead: state.selected?.strands?.[0]?.points?.slice(0, 5).map((point) => [point.x, point.y, point.cx, point.cy]) || [],
+      selectedMotionSample: motionGalaxy ? {
+        galaxyId: motionGalaxy.id,
+        x: motionPose.x,
+        y: motionPose.y,
+        rotation: motionPose.selfRotation
+      } : null,
       pointer: { ...state.pointer },
       cosmosPanning: state.cosmosPanning,
       selectedRingCount: state.selected?.galaxies.filter((galaxy) => MathX.isAnnularGalaxy?.(galaxy)).length || 0,
