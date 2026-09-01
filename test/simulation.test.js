@@ -17,6 +17,11 @@ function assertUnitInterval(value, label) {
   assert.ok(value >= 0 && value <= 1, `${label} should be between zero and one`);
 }
 
+function angularDistance(a, b) {
+  const wrapped = ((a - b + Math.PI) % Cosmo.TAU + Cosmo.TAU) % Cosmo.TAU - Math.PI;
+  return Math.abs(wrapped);
+}
+
 function makeStrand(offset = 0) {
   return {
     role: 'AUTO',
@@ -208,6 +213,150 @@ test('galaxies carry deterministic multiscale structure and model-tension diagno
     });
     assert.ok(Math.abs(Math.hypot(galaxy.haloProxy.offsetX, galaxy.haloProxy.offsetY)
       - galaxy.haloProxy.offsetMagnitude) < 1e-12);
+  });
+});
+
+test('temporal Mandelbrot coordinates preserve the canonical plane when disabled', () => {
+  [
+    { x: -2, y: -1.25 },
+    { x: -0.743643887, y: 0.131825904 },
+    { x: 0, y: 0 },
+    { x: 0.75, y: 1.1 }
+  ].forEach((coordinate, index) => {
+    assert.deepEqual(
+      Cosmo.temporalMandelbrotCoordinate(coordinate.x, coordinate.y, index * 1.317, 0, 0.91),
+      coordinate
+    );
+  });
+});
+
+test('temporal Mandelbrot coordinates remain finite across the working source plane', () => {
+  for (let phaseStep = 0; phaseStep < 24; phaseStep += 1) {
+    const phase = phaseStep / 24 * Cosmo.TAU;
+    for (let y = -2; y <= 2; y += 0.5) {
+      for (let x = -2.5; x <= 1.5; x += 0.5) {
+        const coordinate = Cosmo.temporalMandelbrotCoordinate(x, y, phase, 1, phaseStep / 23);
+        assert.ok(Number.isFinite(coordinate.x));
+        assert.ok(Number.isFinite(coordinate.y));
+      }
+    }
+  }
+});
+
+test('temporal Mandelbrot coordinates close exactly in phase every 32 seconds', () => {
+  const cycle = Cosmo.GALAXY_SPACETIME_CYCLE_SECONDS;
+  [0, 3.25, 17.875, 31.999].forEach((seconds) => {
+    const phase = seconds / cycle * Cosmo.TAU;
+    const repeatedPhase = (seconds + cycle) / cycle * Cosmo.TAU;
+    const coordinate = Cosmo.temporalMandelbrotCoordinate(-0.835, 0.217, phase, 0.72, 0.64);
+    const repeated = Cosmo.temporalMandelbrotCoordinate(-0.835, 0.217, repeatedPhase, 0.72, 0.64);
+    assert.ok(Math.hypot(repeated.x - coordinate.x, repeated.y - coordinate.y) < 1e-12);
+  });
+});
+
+test('spacetime field parameters are deterministic and genome-scaled', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-FIELD-FLOW', { createdAt: 'fixed' });
+  const parameters = Cosmo.spacetimeFieldParameters(universe);
+  assert.deepEqual(parameters, Cosmo.spacetimeFieldParameters(universe));
+  assert.ok(parameters.fieldPhase >= 0 && parameters.fieldPhase < Cosmo.TAU);
+  assert.ok(parameters.fieldDirection === -1 || parameters.fieldDirection === 1);
+  assert.equal(parameters.twistAmplitude, 0.025 + universe.genome.metrics.spin * 0.05);
+});
+
+test('disabled galaxy spacetime flow preserves the canonical pose exactly', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-FLOW-ZERO', { createdAt: 'fixed' });
+  const galaxy = universe.galaxies[0];
+  const pose = Cosmo.galaxySpacetimePose(universe, galaxy, 19.375, 0);
+
+  assert.equal(pose.x, galaxy.x);
+  assert.equal(pose.y, galaxy.y);
+  assert.equal(pose.selfRotation, galaxy.rotation);
+  assert.equal(pose.haloRotation, galaxy.haloProxy.rotation);
+  assert.equal(pose.breath, 1);
+  assert.equal(pose.satellitePhase, 0);
+});
+
+test('galaxy spacetime poses are stable, bounded, and individually phased', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-FLOW', { createdAt: 'fixed' });
+  const [firstGalaxy, secondGalaxy] = universe.galaxies;
+  const archivedFirst = structuredClone(firstGalaxy);
+  const first = Cosmo.galaxySpacetimePose(universe, firstGalaxy, 9.125);
+  const repeated = Cosmo.galaxySpacetimePose(universe, firstGalaxy, 9.125);
+  const second = Cosmo.galaxySpacetimePose(universe, secondGalaxy, 9.125);
+  const reidentified = Cosmo.galaxySpacetimePose(
+    universe,
+    { ...firstGalaxy, id: `${firstGalaxy.id}-ALTERNATE` },
+    9.125
+  );
+
+  assert.deepEqual(first, repeated);
+  assert.notDeepEqual(first, second, 'galaxy ids should derive distinct phases and directions from the genome');
+  assert.notDeepEqual(first, reidentified, 'the phase stream should change even when only the galaxy id changes');
+  assert.deepEqual(firstGalaxy, archivedFirst, 'pose calculation must not mutate the archived galaxy');
+
+  universe.galaxies.slice(0, 24).forEach((galaxy) => {
+    for (let time = 0; time <= Cosmo.GALAXY_SPACETIME_CYCLE_SECONDS; time += 0.25) {
+      const pose = Cosmo.galaxySpacetimePose(universe, galaxy, time);
+      assert.ok(pose.x >= 0.01 && pose.x <= 0.99, `${galaxy.id} x left the field at ${time}s`);
+      assert.ok(pose.y >= 0.01 && pose.y <= 0.99, `${galaxy.id} y left the field at ${time}s`);
+      assert.ok(Number.isFinite(pose.selfRotation));
+      assert.ok(Number.isFinite(pose.haloRotation));
+      assert.ok(pose.breath >= 0.95 && pose.breath <= 1.05);
+      assert.ok(Number.isFinite(pose.satellitePhase));
+    }
+  });
+});
+
+test('galaxy spacetime motion is continuous and closes its 32 second cycle', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-FLOW-CYCLE', { createdAt: 'fixed' });
+  const galaxy = universe.galaxies[0];
+  const cycle = Cosmo.GALAXY_SPACETIME_CYCLE_SECONDS;
+  assert.equal(cycle, 32);
+
+  [5.75, 123.456789].forEach((time) => {
+    const start = Cosmo.galaxySpacetimePose(universe, galaxy, time, 0.63);
+    const repeated = Cosmo.galaxySpacetimePose(universe, galaxy, time + cycle, 0.63);
+    assert.deepEqual(repeated, start, 'the pose should repeat exactly after one cycle');
+  });
+
+  const justBefore = Cosmo.galaxySpacetimePose(universe, galaxy, cycle - 0.001);
+  const justAfter = Cosmo.galaxySpacetimePose(universe, galaxy, 0.001);
+  assert.ok(Math.hypot(justAfter.x - justBefore.x, justAfter.y - justBefore.y) < 0.0001);
+  assert.ok(angularDistance(justAfter.selfRotation, justBefore.selfRotation) < 0.002);
+  assert.ok(Math.abs(justAfter.haloRotation - justBefore.haloRotation) < 0.002);
+  assert.ok(Math.abs(justAfter.breath - justBefore.breath) < 0.001);
+  assert.ok(angularDistance(justAfter.satellitePhase, justBefore.satellitePhase) < 0.002);
+
+  const poses = Array.from({ length: 17 }, (_, index) =>
+    Cosmo.galaxySpacetimePose(universe, galaxy, cycle * index / 16));
+  const selfSteps = poses.slice(1, -1).map((pose, index) =>
+    pose.selfRotation - poses[index].selfRotation);
+  const satelliteSteps = poses.slice(1, -1).map((pose, index) =>
+    pose.satellitePhase - poses[index].satellitePhase);
+  const selfDirection = Math.sign(selfSteps[0]);
+  const satelliteDirection = Math.sign(satelliteSteps[0]);
+  assert.ok(selfSteps.every((step) => Math.sign(step) === selfDirection),
+    'self rotation should keep turning in one direction instead of rocking');
+  assert.ok(satelliteSteps.every((step) => Math.sign(step) === satelliteDirection),
+    'satellites should keep orbiting in one direction instead of rocking');
+  assert.ok(Math.abs(poses.at(-2).selfRotation - poses[0].selfRotation) > Cosmo.TAU * 0.8,
+    'self rotation should complete nearly a full visible turn before the wrap');
+  assert.ok(Math.abs(poses.at(-2).satellitePhase - poses[0].satellitePhase) > Cosmo.TAU * 1.7,
+    'satellites should complete multiple visible orbits before the wrap');
+});
+
+test('partial spacetime strength uses the shortest rotation through the cycle seam', () => {
+  const universe = Cosmo.makeUniverse([makeStrand()], 'U-FLOW-EASE', { createdAt: 'fixed' });
+  const galaxy = universe.galaxies[0];
+
+  [0.06, 0.42, 0.99].forEach((strength) => {
+    [0.001, 15.9, 31.999].forEach((time) => {
+      const pose = Cosmo.galaxySpacetimePose(universe, galaxy, time, strength);
+      assert.ok(Math.abs(pose.selfRotation - galaxy.rotation) <= Math.PI * strength + 1e-12,
+        'an easing disk should not unwind through an extra full turn');
+      assert.ok(Math.abs(pose.satellitePhase) <= Math.PI * strength + 1e-12,
+        'easing satellites should take the shortest equivalent orbit angle');
+    });
   });
 });
 

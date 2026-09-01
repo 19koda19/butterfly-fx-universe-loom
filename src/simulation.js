@@ -8,6 +8,8 @@
   const TAU = Math.PI * 2;
   const PHI = (1 + Math.sqrt(5)) / 2;
   const GOLDEN_ANGLE = TAU / (PHI * PHI);
+  const GALAXY_SPACETIME_CYCLE_SECONDS = 32;
+  const GALAXY_SPACETIME_TICKS_PER_SECOND = 1e9;
 
   function clamp(value, min = 0, max = 1) {
     return Math.min(max, Math.max(min, value));
@@ -93,6 +95,34 @@
       y: anchor.y - (ny - 0.5) * span,
       scale
     }, aspect, minScale, maxScale);
+  }
+
+  /**
+   * Map a canonical Mandelbrot parameter through the same bounded temporal
+   * Mobius continuation used by the source shader. The recurrence remains
+   * quadratic after this coordinate change: z[n + 1] = z[n]^2 + C_tau(c).
+   */
+  function temporalMandelbrotCoordinate(cx, cy, phaseRadians, strength = 1, spin = 0.5) {
+    const x = Number.isFinite(cx) ? cx : 0;
+    const y = Number.isFinite(cy) ? cy : 0;
+    const amount = clamp(Number.isFinite(strength) ? strength : 1);
+    if (amount === 0) return { x, y };
+
+    const phase = Number.isFinite(phaseRadians) ? phaseRadians : 0;
+    const amplitude = amount * (0.045 + clamp(Number.isFinite(spin) ? spin : 0.5) * 0.085);
+    const lambdaX = Math.cos(phase) * amplitude;
+    const lambdaY = Math.sin(phase) * amplitude;
+    const denominatorX = 1 + lambdaX * x - lambdaY * y;
+    const denominatorY = lambdaX * y + lambdaY * x;
+    const denominatorMagnitude = Math.max(
+      1e-18,
+      denominatorX * denominatorX + denominatorY * denominatorY
+    );
+
+    return {
+      x: (x * denominatorX + y * denominatorY) / denominatorMagnitude,
+      y: (y * denominatorX - x * denominatorY) / denominatorMagnitude
+    };
   }
 
   function mandelbrotSample(cx, cy, maxIterations = 180) {
@@ -456,6 +486,130 @@
 
   function normalizeAngle(angle) {
     return ((angle % TAU) + TAU) % TAU;
+  }
+
+  function principalAngle(angle) {
+    return normalizeAngle(angle + Math.PI) - Math.PI;
+  }
+
+  /**
+   * Stable universe-wide flow values shared by the CPU galaxy overlay and the
+   * density-field shader. Keeping this stream separate from galaxy-local
+   * randomness prevents render order from changing the field motion.
+   */
+  function spacetimeFieldParameters(universe) {
+    const genome = universe?.genome || {};
+    const genomeSeed = Number.isFinite(genome.seed)
+      ? genome.seed >>> 0
+      : fnv1a(String(genome.seedHex || '0'));
+    const random = mulberry32((genomeSeed ^ 0x51f15e5d) >>> 0);
+    const spin = clamp(Number.isFinite(genome.metrics?.spin) ? genome.metrics.spin : 0.5);
+    return {
+      fieldPhase: random() * TAU,
+      fieldDirection: random() < 0.5 ? -1 : 1,
+      twistAmplitude: 0.025 + spin * 0.05
+    };
+  }
+
+  /**
+   * Return a closed, deterministic animation pose without mutating the archived
+   * galaxy. flowTime is measured in seconds and repeats every 32 seconds.
+   * satellitePhase is an angular offset for any independently seeded orbits.
+   */
+  function galaxySpacetimePose(universe, galaxy, flowTime, strength = 1) {
+    const baseX = Number.isFinite(galaxy?.x) ? galaxy.x : 0.5;
+    const baseY = Number.isFinite(galaxy?.y) ? galaxy.y : 0.5;
+    const baseRotation = Number.isFinite(galaxy?.rotation) ? galaxy.rotation : 0;
+    const baseHaloRotation = Number.isFinite(galaxy?.haloProxy?.rotation)
+      ? galaxy.haloProxy.rotation
+      : baseRotation;
+    const amount = clamp(Number.isFinite(strength) ? strength : 1);
+
+    // Preserve the canonical generated pose bit-for-bit when spacetime flow is
+    // disabled. This keeps exports and legacy render paths entirely unchanged.
+    if (amount === 0) {
+      return {
+        x: baseX,
+        y: baseY,
+        selfRotation: baseRotation,
+        haloRotation: baseHaloRotation,
+        breath: 1,
+        satellitePhase: 0
+      };
+    }
+
+    const genome = universe?.genome || {};
+    const genomeSeed = Number.isFinite(genome.seed) ? genome.seed >>> 0 : fnv1a(String(genome.seedHex || '0'));
+    const galaxyKey = galaxy?.id || `${baseX.toFixed(12)},${baseY.toFixed(12)}`;
+    const galaxyRandom = mulberry32(fnv1a(`${genome.seedHex || genomeSeed}|${galaxyKey}|spacetime-pose@1`));
+    const localPhase = galaxyRandom() * TAU;
+    const localDirection = galaxyRandom() < 0.5 ? -1 : 1;
+    const localHarmonic = 1 + Math.floor(galaxyRandom() * 2);
+    const epicycleAspect = 0.58 + galaxyRandom() * 0.34;
+    const { fieldPhase, fieldDirection, twistAmplitude } = spacetimeFieldParameters(universe);
+
+    const seconds = Number.isFinite(flowTime) ? flowTime : 0;
+    const rawWrappedSeconds = ((seconds % GALAXY_SPACETIME_CYCLE_SECONDS)
+      + GALAXY_SPACETIME_CYCLE_SECONDS) % GALAXY_SPACETIME_CYCLE_SECONDS;
+    // Canonical nanosecond ticks remove accumulated floating-point remainder
+    // noise, so long-running clocks still return a bit-identical closed pose.
+    const cycleTicks = Math.round(rawWrappedSeconds * GALAXY_SPACETIME_TICKS_PER_SECOND)
+      % (GALAXY_SPACETIME_CYCLE_SECONDS * GALAXY_SPACETIME_TICKS_PER_SECOND);
+    const cycleAngle = cycleTicks
+      / (GALAXY_SPACETIME_CYCLE_SECONDS * GALAXY_SPACETIME_TICKS_PER_SECOND) * TAU;
+    const density = clamp(Number.isFinite(genome.metrics?.density) ? genome.metrics.density : 0.5);
+    const turbulence = clamp(Number.isFinite(genome.metrics?.turbulence) ? genome.metrics.turbulence : 0.5);
+
+    // Fade displacement near the field edge so the motion remains graceful and
+    // retains headroom before the final numerical safety clamp.
+    const edgeClearance = Math.max(0, Math.min(
+      baseX - 0.01,
+      0.99 - baseX,
+      baseY - 0.01,
+      0.99 - baseY
+    ));
+    const edgeUnit = clamp(edgeClearance / 0.08);
+    const edgeEnvelope = edgeUnit * edgeUnit * (3 - 2 * edgeUnit);
+
+    // A coherent genome-level twist turns the field about its center. Each
+    // galaxy then traces a much smaller, individually phased epicycle.
+    const twistAngle = amount * edgeEnvelope * fieldDirection
+      * twistAmplitude * Math.sin(cycleAngle + fieldPhase);
+    const cosine = Math.cos(twistAngle);
+    const sine = Math.sin(twistAngle);
+    const centerX = baseX - 0.5;
+    const centerY = baseY - 0.5;
+    const twistedX = 0.5 + centerX * cosine - centerY * sine;
+    const twistedY = 0.5 + centerX * sine + centerY * cosine;
+    const epicycleRadius = amount * edgeEnvelope * (0.003 + turbulence * 0.005);
+    const epicycleAngle = localDirection * localHarmonic * cycleAngle + localPhase;
+    const x = clamp(twistedX + Math.cos(epicycleAngle) * epicycleRadius, 0.01, 0.99);
+    const y = clamp(
+      twistedY + Math.sin(epicycleAngle) * epicycleRadius * epicycleAspect,
+      0.01,
+      0.99
+    );
+
+    const selfNutation = 0.12 * Math.sin(
+      (localHarmonic + 1) * cycleAngle - localPhase * 0.7
+    );
+    const selfTurn = localHarmonic * cycleAngle + selfNutation;
+    // During an eased transition, take the shortest equivalent rotation back
+    // to the canonical pose. At full strength the integer winding is retained,
+    // so disks genuinely spin instead of rocking back and forth.
+    const visibleSelfTurn = amount < 1 ? principalAngle(selfTurn) : selfTurn;
+    const selfRotation = baseRotation + amount * localDirection * visibleSelfTurn;
+    const haloRotation = baseHaloRotation + amount * fieldDirection * (0.12 + density * 0.22)
+      * Math.sin(cycleAngle + fieldPhase + 0.7);
+    const breathAmplitude = 0.014 + clamp(Number(galaxy?.clumpiness) || 0) * 0.026;
+    const breath = 1 + amount * breathAmplitude * Math.sin(2 * cycleAngle + localPhase);
+    const satelliteTurns = localHarmonic + 1;
+    const satelliteNutation = 0.16 * Math.sin(2 * cycleAngle - localPhase);
+    const satelliteTurn = satelliteTurns * cycleAngle + satelliteNutation;
+    const visibleSatelliteTurn = amount < 1 ? principalAngle(satelliteTurn) : satelliteTurn;
+    const satellitePhase = amount * localDirection * visibleSatelliteTurn;
+
+    return { x, y, selfRotation, haloRotation, breath, satellitePhase };
   }
 
   function annularTargetCount(genome, count) {
@@ -846,6 +1000,7 @@
     TAU,
     PHI,
     GOLDEN_ANGLE,
+    GALAXY_SPACETIME_CYCLE_SECONDS,
     clamp,
     lerp,
     fnv1a,
@@ -857,6 +1012,7 @@
     cosmicFitSpan,
     clampCosmicView,
     zoomCosmicView,
+    temporalMandelbrotCoordinate,
     mandelbrotSample,
     resampleStroke,
     makeReciprocalStrands,
@@ -864,6 +1020,8 @@
     generateAttractor,
     generateGalaxies,
     galaxyFormationTension,
+    spacetimeFieldParameters,
+    galaxySpacetimePose,
     isAnnularGalaxy,
     makeUniverse,
     bottleUniverse,

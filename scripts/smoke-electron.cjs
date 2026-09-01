@@ -152,6 +152,18 @@ app.whenReady().then(async () => {
         activeBoxShadow: activeStyle?.boxShadow
       };
     })(),
+    spacetimeControl: (() => {
+      const button = document.querySelector('#spacetime-button');
+      const rect = button?.getBoundingClientRect();
+      return {
+        count: document.querySelectorAll('#spacetime-button').length,
+        pressed: button?.getAttribute('aria-pressed'),
+        label: button?.getAttribute('aria-label'),
+        status: document.querySelector('#spacetime-status')?.textContent,
+        width: rect?.width || 0,
+        height: rect?.height || 0
+      };
+    })(),
     versionedAssets: {
       styles: document.querySelector('link[rel="stylesheet"]')?.href.includes('?v='),
       app: [...document.scripts].some((script) => /app\\.js\\?v=/.test(script.src))
@@ -181,6 +193,7 @@ app.whenReady().then(async () => {
   let reciprocitySettledReport = null;
   let reciprocityTourReport = null;
   let reciprocityReplayReport = null;
+  let spacetimeReport = null;
   expect(report.canvasCount === 1, 'exactly one p5 canvas should exist');
   expect(report.engine?.sourceVisual === 'mandelbrot', 'Mandelbrot should be the default source microscope');
   expect(report.opticsMark?.count === 1 && report.opticsMark?.legacyCount === 0,
@@ -197,6 +210,12 @@ app.whenReady().then(async () => {
     && report.workspaceModes?.activeBackgroundImage === 'none'
     && report.workspaceModes?.activeBoxShadow === 'none',
     'the active workspace mode should remain borderless and free of a highlighted tile');
+  expect(report.spacetimeControl?.count === 1
+    && report.spacetimeControl?.pressed === 'false'
+    && report.spacetimeControl?.status === 'STILL',
+    'Spacetime Flow should expose one still, unpressed control at startup');
+  expect(report.spacetimeControl?.width > 80 && report.spacetimeControl?.height >= 27,
+    'Spacetime Flow should retain a legible pointer target in the model-time ribbon');
   expect(report.versionedAssets?.styles && report.versionedAssets?.app,
     'release-critical CSS and app assets should carry cache-busting versions');
   expect(report.engine?.universeCount >= 1 || !gpuSmoke, 'draw gesture should create a universe in GPU mode');
@@ -635,6 +654,124 @@ app.whenReady().then(async () => {
   } catch (error) {
     errors.add(`Reciprocity smoke failed: ${error.message}`);
   }
+  try {
+    const beforeFlow = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`document.querySelector('#spacetime-button').click()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 4; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const ramping = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 38; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const flowing = await window.webContents.executeJavaScript(`(() => {
+      const engine = window.ButterflyFXDiagnostics.status();
+      const button = document.querySelector('#spacetime-button');
+      const rect = button?.getBoundingClientRect();
+      return {
+        engine,
+        pressed: button?.getAttribute('aria-pressed'),
+        activeClass: button?.classList.contains('is-active'),
+        bodyActive: document.body.classList.contains('spacetime-flow-active'),
+        status: document.querySelector('#spacetime-status')?.textContent,
+        sourceTitle: document.querySelector('#source-stage-title')?.textContent,
+        width: rect?.width || 0
+      };
+    })()`);
+    await window.webContents.executeJavaScript(`document.querySelector('#spacetime-button').click()`);
+    const pauseStart = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 42; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const easing = await window.webContents.executeJavaScript(`(() => ({
+      engine: window.ButterflyFXDiagnostics.status(),
+      status: document.querySelector('#spacetime-status')?.textContent,
+      sourceTitle: document.querySelector('#source-stage-title')?.textContent
+    }))()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 92; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const settled = await window.webContents.executeJavaScript(`(() => {
+      const engine = window.ButterflyFXDiagnostics.status();
+      const button = document.querySelector('#spacetime-button');
+      const rect = button?.getBoundingClientRect();
+      return {
+        engine,
+        pressed: button?.getAttribute('aria-pressed'),
+        activeClass: button?.classList.contains('is-active'),
+        bodyActive: document.body.classList.contains('spacetime-flow-active'),
+        status: document.querySelector('#spacetime-status')?.textContent,
+        sourceTitle: document.querySelector('#source-stage-title')?.textContent,
+        width: rect?.width || 0
+      };
+    })()`);
+    await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.setReducedMotion(true); document.querySelector('#spacetime-button').click()`);
+    await window.webContents.executeJavaScript(`(async () => {
+      for (let frame = 0; frame < 42; frame += 1) {
+        window.ButterflyFXDiagnostics.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    })()`);
+    const beforeClear = await window.webContents.executeJavaScript(`window.ButterflyFXDiagnostics.status()`);
+    const afterClear = await window.webContents.executeJavaScript(`(() => {
+      window.confirm = () => true;
+      document.querySelector('#clear-archive').click();
+      const engine = window.ButterflyFXDiagnostics.status();
+      return {
+        engine,
+        pressed: document.querySelector('#spacetime-button')?.getAttribute('aria-pressed'),
+        status: document.querySelector('#spacetime-status')?.textContent
+      };
+    })()`);
+    spacetimeReport = { beforeFlow, ramping, flowing, pauseStart, easing, settled, beforeClear, afterClear };
+    expect(Boolean(beforeFlow.selectedUniverseId), 'Spacetime Flow smoke should begin with a selected universe');
+    expect(ramping.spacetimeActive
+      && ramping.spacetimeStrength > 0 && ramping.spacetimeStrength < 1
+      && ramping.spacetimeTime === beforeFlow.spacetimeTime,
+      'the temporal phase should stay locked while winding rotations ease in');
+    expect(flowing.engine.spacetimeActive
+      && flowing.engine.spacetimeTime > beforeFlow.spacetimeTime
+      && flowing.engine.spacetimeStrength > 0.5,
+      'Spacetime Flow should advance a ramped temporal phase while engaged');
+    expect(flowing.pressed === 'true' && flowing.activeClass && flowing.bodyActive
+      && flowing.status === 'FLOWING' && /TEMPORAL LENS/i.test(flowing.sourceTitle || ''),
+      'the active Spacetime Flow control and source labels should expose temporal state');
+    expect(Math.abs(flowing.width - report.spacetimeControl.width) < 0.1
+      && Math.abs(settled.width - report.spacetimeControl.width) < 0.1,
+      'Spacetime Flow status changes should not shift the model-time layout');
+    expect(!easing.engine.spacetimeActive
+      && Math.abs(easing.engine.spacetimeTime - pauseStart.spacetimeTime) < 1e-9
+      && easing.engine.spacetimeStrength < pauseStart.spacetimeStrength,
+      'pausing Spacetime Flow should freeze phase while easing its deformation away');
+    expect(settled.engine.spacetimeStrength < 0.015
+      && settled.pressed === 'false' && !settled.activeClass && !settled.bodyActive
+      && settled.status === 'STILL' && /MANDELBROT \/ SOURCE/i.test(settled.sourceTitle || ''),
+      'Spacetime Flow should settle back to the canonical Mandelbrot state');
+    expect(beforeClear.spacetimeActive && beforeClear.reducedMotion
+      && beforeClear.spacetimeStrength === 1
+      && Math.abs(beforeClear.spacetimeVisualStrength - 0.3) < 1e-12,
+      'reduced-motion flow should cap deformation while retaining explicit user control');
+    expect(beforeClear.spacetimeActive
+      && afterClear.engine.universeCount === 0 && !afterClear.engine.selectedUniverseId
+      && !afterClear.engine.spacetimeActive && afterClear.engine.spacetimeTime === 0
+      && afterClear.engine.spacetimeStrength === 0
+      && afterClear.pressed === 'false' && afterClear.status === 'STILL',
+      'clearing the archive should reset active flow without trapping its control');
+  } catch (error) {
+    errors.add(`Spacetime Flow smoke failed: ${error.message}`);
+  }
   const reportPath = path.join('/tmp', 'butterfly-fx-smoke-report.json');
   const payload = {
     report,
@@ -650,6 +787,7 @@ app.whenReady().then(async () => {
     reciprocitySettledReport,
     reciprocityTourReport,
     reciprocityReplayReport,
+    spacetimeReport,
     cameraPersistenceReport,
     compositionReport,
     errors: [...errors],

@@ -54,7 +54,19 @@
     uniform float uTime;
     uniform float uAccent;
     uniform float uContrast;
+    uniform float uFlowPhase;
+    uniform float uFlowStrength;
+    uniform float uFlowSpin;
     uniform int uIterations;
+
+    vec2 complexMultiply(vec2 a, vec2 b) {
+      return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+    }
+
+    vec2 complexDivide(vec2 a, vec2 b) {
+      float denominator = max(1.0e-18, dot(b, b));
+      return vec2(a.x * b.x + a.y * b.y, a.y * b.x - a.x * b.y) / denominator;
+    }
 
     vec3 spectrum(float t, float accent) {
       vec3 phase = vec3(0.02, 0.28, 0.56) + accent;
@@ -68,17 +80,19 @@
 
     void main() {
       vec2 uv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);
-      vec2 c = uCenter + (uv - 0.5) * vec2(uScale * uAspect, uScale);
+      vec2 displayC = uCenter + (uv - 0.5) * vec2(uScale * uAspect, uScale);
       vec2 z = vec2(0.0);
+      float continuationAmplitude = uFlowStrength * (0.045 + uFlowSpin * 0.085);
+      vec2 lambda = continuationAmplitude * vec2(cos(uFlowPhase), sin(uFlowPhase));
+      vec2 c = complexDivide(displayC, vec2(1.0, 0.0) + complexMultiply(lambda, displayC));
       float trap = 12.0;
       float escapedAt = 0.0;
       bool escaped = false;
 
       for (int i = 0; i < 260; i++) {
         if (i >= uIterations) break;
-        float x = z.x * z.x - z.y * z.y + c.x;
-        float y = 2.0 * z.x * z.y + c.y;
-        z = vec2(x, y);
+        vec2 zSquared = complexMultiply(z, z);
+        z = zSquared + c;
         trap = min(trap, min(abs(length(z) - 0.5), min(abs(z.x), abs(z.y))));
         if (dot(z, z) > 256.0) {
           escapedAt = float(i) + 1.0 - log2(max(0.00001, log2(max(2.0, length(z)))));
@@ -97,12 +111,12 @@
         color *= 0.14 + edge * 1.28;
         color += vec3(0.18, 0.58, 0.7) * exp(-trap * 58.0) * 0.55;
       } else {
-        float inner = 0.015 + 0.018 * sin(c.x * 42.0 + c.y * 31.0 + uTime * 0.1);
+        float inner = 0.015 + 0.018 * sin(displayC.x * 42.0 + displayC.y * 31.0 + uTime * 0.1);
         color += vec3(0.02, 0.03, 0.065) * inner;
       }
 
       float decade = pow(10.0, floor(log(max(uScale, 0.0000001)) / log(10.0)));
-      float grid = max(gridLine(c.x / decade, 0.46), gridLine(c.y / decade, 0.46));
+      float grid = max(gridLine(displayC.x / decade, 0.46), gridLine(displayC.y / decade, 0.46));
       color += vec3(0.12, 0.28, 0.38) * grid * 0.12;
       float vignette = 1.0 - smoothstep(0.38, 0.78, length(uv - 0.5));
       color *= 0.58 + 0.42 * vignette;
@@ -114,6 +128,11 @@
   const cosmosBody = `
     uniform float uTime;
     uniform float uAge;
+    uniform float uFlowPhase;
+    uniform float uFlowStrength;
+    uniform float uFlowFieldPhase;
+    uniform float uFlowFieldDirection;
+    uniform float uFlowTwistAmplitude;
     uniform float uAspect;
     uniform vec2 uViewCenter;
     uniform float uViewScale;
@@ -223,7 +242,6 @@
       vec2 screenUv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);
       vec2 screenP = (uViewCenter - 0.5) + (screenUv - 0.5) * vec2(uViewScale * uAspect, uViewScale);
       vec2 p = screenP;
-      vec2 uv = p + 0.5;
       float goldenSignal = max(uGoldenRule, uGoldenCompare);
       float comparisonFeather = max(0.0015, fwidth(screenUv.x) * 1.5);
       float comparisonSide = smoothstep(
@@ -236,6 +254,20 @@
       float dawn = smoothstep(0.18, 0.72, uAge);
       float detailOctave = clamp(log(max(uViewZoom, 1.0)) / log(2.0), 0.0, 7.0);
 
+      vec2 flowUv = p + 0.5;
+      float edgeClearance = max(0.0, min(
+        min(flowUv.x - 0.01, 0.99 - flowUv.x),
+        min(flowUv.y - 0.01, 0.99 - flowUv.y)
+      ));
+      float edgeUnit = clamp(edgeClearance / 0.08, 0.0, 1.0);
+      float edgeEnvelope = edgeUnit * edgeUnit * (3.0 - 2.0 * edgeUnit);
+      float temporalTwist = uFlowStrength * edgeEnvelope * uFlowFieldDirection
+        * uFlowTwistAmplitude * sin(uFlowPhase + uFlowFieldPhase);
+      // CPU galaxies receive the corresponding forward rotation. The shader
+      // inverse-samples it so luminous proxies remain seated in their field.
+      // rotate2d's column-major GLSL constructor applies R(-angle).
+      p = rotate2d(temporalTwist) * p;
+
       float angularFlow = uSpin * (0.18 + length(p) * 0.48) * growth;
       p = rotate2d(angularFlow) * p;
       vec2 warp = vec2(
@@ -243,6 +275,7 @@
         seedField(p * (1.4 + uTurbulence) + 37.2, visibleSeed.wzyx)
       ) - 0.5;
       p += warp * (0.08 + uTurbulence * 0.22) * growth;
+      vec2 uv = p + 0.5;
 
       float localLarge = seedField(p * 2.15, uSeed);
       float sharedLarge = seedField(p * 2.15, uSharedSeed);

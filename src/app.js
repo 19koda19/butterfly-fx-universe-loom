@@ -29,6 +29,7 @@
   });
   // Keep the inferred luminous scaffolds subordinate to the stellar particles.
   const GALAXY_STRUCTURE_OPACITY = 0.68;
+  const SPACETIME_CYCLE_SECONDS = MathX.GALAXY_SPACETIME_CYCLE_SECONDS || 32;
 
   function makeCosmosCamera() {
     return {
@@ -83,6 +84,13 @@
     previewAt: 0,
     age: 0,
     playing: false,
+    spacetime: {
+      active: false,
+      time: 0,
+      strength: 0,
+      rampFrom: 0,
+      rampElapsed: 0
+    },
     layers: { dark: true, bubbles: true, gas: true, stars: true, halos: true, tension: true, attractor: true },
     cosmosViews: new Map(),
     cosmosCamera: makeCosmosCamera(),
@@ -195,6 +203,23 @@
     return state.sourceVisual === 'buddhabrot' ? 'BUDDHABROT' : 'MANDELBROT';
   }
 
+  function sourceStageTitle() {
+    if (state.sourceVisual === 'buddhabrot') return 'BUDDHABROT / ORBIT DENSITY';
+    return state.spacetime.active || state.spacetime.strength > 0.015
+      ? 'MANDELBROT / TEMPORAL LENS'
+      : 'MANDELBROT / SOURCE';
+  }
+
+  function sourceInstructionText() {
+    if (state.sourceVisual === 'buddhabrot') {
+      return 'Drag through escaped-orbit traffic. The same complex coordinates become a deterministic cosmic genome.';
+    }
+    if (state.spacetime.active || state.spacetime.strength > 0.015) {
+      return 'A conformal time lens reshapes the visible set; drawing still records the canonical c-coordinate genome.';
+    }
+    return 'Drag through the luminous boundary. The path becomes a deterministic cosmic genome.';
+  }
+
   function updateFocusViewLabels() {
     const labels = {
       both: 'VIEW · BOTH',
@@ -235,17 +260,15 @@
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-pressed', String(active));
     });
-    $('#source-stage-title').textContent = mode === 'buddhabrot'
-      ? 'BUDDHABROT / ORBIT DENSITY'
-      : 'MANDELBROT / SOURCE';
-    $('#source-instruction').textContent = mode === 'buddhabrot'
-      ? 'Drag through escaped-orbit traffic. The same complex coordinates become a deterministic cosmic genome.'
-      : 'Drag through the luminous boundary. The path becomes a deterministic cosmic genome.';
+    $('#source-stage-title').textContent = sourceStageTitle();
+    $('#source-instruction').textContent = sourceInstructionText();
     if (!state.drawing) $('#source-state').textContent = idleSourceState();
     updateFocusViewLabels();
     if (!options.quiet) {
       const copy = mode === 'buddhabrot'
-        ? 'Buddhabrot active · escaped orbits are accumulating progressively on the GPU.'
+        ? (state.spacetime.active
+          ? 'Buddhabrot active · canonical orbits accumulate while the generated universe keeps flowing.'
+          : 'Buddhabrot active · escaped orbits are accumulating progressively on the GPU.')
         : 'Mandelbrot active · pixels show complex escape behavior.';
       showToast(copy);
       announce(copy);
@@ -480,7 +503,8 @@
     let nearestDistance = Infinity;
     universe.galaxies.forEach((galaxy) => {
       if (galaxy.birth > state.age) return;
-      const distance = Math.hypot(galaxy.x - view.x, galaxy.y - view.y);
+      const pose = galaxyPose(universe, galaxy);
+      const distance = Math.hypot(pose.x - view.x, pose.y - view.y);
       const weighted = distance / (0.7 + galaxy.mass * 0.3);
       if (weighted < nearestDistance) {
         nearest = galaxy;
@@ -562,7 +586,11 @@
   }
 
   function idleSourceState() {
-    if (state.sourceVisual !== 'buddhabrot') return 'C-SPACE · READY';
+    if (state.sourceVisual !== 'buddhabrot') {
+      return state.spacetime.active || state.spacetime.strength > 0.015
+        ? `Cτ LENS · ${(state.spacetime.time % SPACETIME_CYCLE_SECONDS).toFixed(1)}s / ${SPACETIME_CYCLE_SECONDS}s`
+        : 'C-SPACE · READY';
+    }
     const samples = state.buddhabrot?.samples || 0;
     const sampleLabel = samples >= 1e6
       ? `${(samples / 1e6).toFixed(1)}M`
@@ -1269,11 +1297,12 @@
     if (!galaxy) {
       resetCosmosCamera({ quiet: true, motion: 'tour' });
     } else {
+      const pose = galaxyPose(universe, galaxy);
       const goldenTour = hasCurrentMutualField && universe.id === goldenRule.mutual.id;
       const zoom = goldenTour
         ? (phase === 0 ? PHI ** 4 : (phase === 1 ? PHI ** 8 : PHI ** 6))
         : (phase === 0 ? 7 : (phase === 1 ? 34 : 16));
-      setCosmosCameraTarget({ x: galaxy.x, y: galaxy.y, scale: 1 / zoom }, {
+      setCosmosCameraTarget({ x: pose.x, y: pose.y, scale: 1 / zoom }, {
         inspectId: galaxy.id,
         inspectUniverseId: universe.id,
         motion: 'tour'
@@ -1289,8 +1318,8 @@
     return galaxy ? {
       universeId: universe.id,
       galaxyId: galaxy.id,
-      x: galaxy.x,
-      y: galaxy.y
+      x: galaxyPose(universe, galaxy).x,
+      y: galaxyPose(universe, galaxy).y
     } : null;
   }
 
@@ -1422,7 +1451,8 @@
       state.age = Math.min(1, galaxy.birth + 0.06);
       updateAgeUI();
     }
-    setCosmosCameraTarget({ x: galaxy.x, y: galaxy.y, scale: 1 / 28 }, {
+    const pose = galaxyPose(universe, galaxy);
+    setCosmosCameraTarget({ x: pose.x, y: pose.y, scale: 1 / 28 }, {
       inspectId: galaxy.id,
       inspectUniverseId: universe.id,
       motion: 'manual'
@@ -1469,7 +1499,10 @@
     $('#hud-halos').textContent = String(universe.genome.genes.haloCount);
     $('#hud-age').textContent = state.age.toFixed(2);
     $('#hud-order').textContent = `${Math.round(orderProxy(universe) * 100)}%`;
-    $('#universe-state').textContent = `${universe.id} · ${universe.genome.seedHex}`;
+    const flowSuffix = state.spacetime.active
+      ? ` · τ ${(state.spacetime.time % SPACETIME_CYCLE_SECONDS).toFixed(1)}s`
+      : '';
+    $('#universe-state').textContent = `${universe.id} · ${universe.genome.seedHex}${flowSuffix}`;
     $('#divergence-hud').hidden = !state.comparison || state.viewMode !== 'divergence';
   }
 
@@ -1532,6 +1565,144 @@
     return 'PRESENT MODEL';
   }
 
+  function spacetimePhase() {
+    const wrapped = ((state.spacetime.time % SPACETIME_CYCLE_SECONDS) + SPACETIME_CYCLE_SECONDS)
+      % SPACETIME_CYCLE_SECONDS;
+    return wrapped / SPACETIME_CYCLE_SECONDS * MathX.TAU;
+  }
+
+  function visualSpacetimeStrength() {
+    return state.spacetime.strength * (state.reducedMotion ? 0.3 : 1);
+  }
+
+  function galaxyPose(universe, galaxy) {
+    if (MathX.galaxySpacetimePose) {
+      const amount = visualSpacetimeStrength();
+      const pose = MathX.galaxySpacetimePose(
+        universe,
+        galaxy,
+        state.spacetime.time,
+        amount
+      );
+      if (!state.reducedMotion || amount <= 0) return pose;
+      const localPhase = (MathX.fnv1a(`${galaxy.id}|reduced-spacetime`) >>> 0)
+        / 0x100000000 * MathX.TAU;
+      const phase = spacetimePhase() + localPhase;
+      return {
+        ...pose,
+        selfRotation: galaxy.rotation + amount * 0.5 * Math.sin(phase),
+        haloRotation: (galaxy.haloProxy?.rotation ?? galaxy.rotation)
+          + amount * 0.32 * Math.sin(phase + 0.9),
+        satellitePhase: amount * 0.8 * Math.sin(phase - 0.65)
+      };
+    }
+    return {
+      x: galaxy.x,
+      y: galaxy.y,
+      selfRotation: galaxy.rotation,
+      haloRotation: galaxy.haloProxy?.rotation ?? galaxy.rotation,
+      breath: 1,
+      satellitePhase: 0
+    };
+  }
+
+  function fieldSpacetimePosition(universe, x, y, flowContext = null) {
+    const amount = flowContext?.amount ?? visualSpacetimeStrength();
+    if (amount <= 0 || !MathX.spacetimeFieldParameters) return { x, y };
+    const { fieldPhase, fieldDirection, twistAmplitude } = flowContext?.parameters
+      || MathX.spacetimeFieldParameters(universe);
+    const edgeClearance = Math.max(0, Math.min(x - 0.01, 0.99 - x, y - 0.01, 0.99 - y));
+    const edgeUnit = MathX.clamp(edgeClearance / 0.08);
+    const edgeEnvelope = edgeUnit * edgeUnit * (3 - 2 * edgeUnit);
+    const angle = amount * edgeEnvelope * fieldDirection * twistAmplitude
+      * Math.sin((flowContext?.phase ?? spacetimePhase()) + fieldPhase);
+    const cosine = Math.cos(angle);
+    const sine = Math.sin(angle);
+    const centeredX = x - 0.5;
+    const centeredY = y - 0.5;
+    return {
+      x: 0.5 + centeredX * cosine - centeredY * sine,
+      y: 0.5 + centeredX * sine + centeredY * cosine
+    };
+  }
+
+  function updateSpacetimeUI() {
+    const { active, strength, time } = state.spacetime;
+    const button = $('#spacetime-button');
+    if (!button) return;
+    const settling = !active && strength > 0.015;
+    button.classList.toggle('is-active', active);
+    button.classList.toggle('is-settling', settling);
+    button.setAttribute('aria-pressed', String(active));
+    button.setAttribute('aria-label', active ? 'Pause Spacetime Flow' : 'Start Spacetime Flow');
+    $('#spacetime-status').textContent = active ? 'FLOWING' : (settling ? 'SETTLING' : 'STILL');
+    document.body.classList.toggle('spacetime-flow-active', active);
+    $('#source-stage-title').textContent = sourceStageTitle();
+    $('#source-instruction').textContent = sourceInstructionText();
+    if (!state.drawing) $('#source-state').textContent = idleSourceState();
+    if (state.selected) {
+      const suffix = active ? ` · τ ${(time % SPACETIME_CYCLE_SECONDS).toFixed(1)}s` : '';
+      $('#universe-state').textContent = `${state.selected.id} · ${state.selected.genome.seedHex}${suffix}`;
+    }
+  }
+
+  function updateSpacetime(deltaTime) {
+    const seconds = Math.min(50, Math.max(0, deltaTime || 0)) * 0.001;
+    const target = state.spacetime.active ? 1 : 0;
+    if (state.spacetime.strength !== target) {
+      state.spacetime.rampElapsed += seconds;
+      const duration = state.spacetime.active ? 0.62 : 0.76;
+      const progress = MathX.clamp(state.spacetime.rampElapsed / duration);
+      const ease = progress * progress * (3 - 2 * progress);
+      state.spacetime.strength = MathX.lerp(state.spacetime.rampFrom, target, ease);
+      if (progress >= 1) state.spacetime.strength = target;
+    }
+    // Hold phase while blending. Integer-turn disks can cross the 32-second
+    // seam only at unit strength, where their 2π reset is visually identical.
+    if (state.spacetime.active && state.spacetime.strength === 1 && !state.contextLost) {
+      const motionScale = state.reducedMotion ? 0.2 : 1;
+      state.spacetime.time += seconds * motionScale;
+    }
+  }
+
+  function beginSpacetimeTransition(active) {
+    const next = Boolean(active);
+    if (state.spacetime.active === next) return;
+    state.spacetime.rampFrom = state.spacetime.strength;
+    state.spacetime.rampElapsed = 0;
+    state.spacetime.active = next;
+  }
+
+  function toggleSpacetimeFlow() {
+    const activating = !state.spacetime.active;
+    if (activating && !state.selected) {
+      showToast('Draw a path before sending a universe through spacetime.');
+      return;
+    }
+    if (activating && state.sourceVisual === 'buddhabrot') {
+      setSourceVisual('mandelbrot', { quiet: true });
+    }
+    beginSpacetimeTransition(activating);
+    updateSpacetimeUI();
+    if (activating) {
+      showToast('Spacetime Flow engaged · one phase now bends the Mandelbrot lens, field, galaxies, rings, and satellites.', 5200);
+      announce('Spacetime Flow engaged. The temporal Mandelbrot lens and generated universe are moving together.');
+    } else {
+      showToast('Spacetime Flow paused · the temporal lens is easing back to the classical Mandelbrot set.');
+      announce('Spacetime Flow paused. The universe is settling and its phase is preserved.');
+    }
+  }
+
+  function followSpacetimeInspection() {
+    if (state.spacetime.strength <= 0.001 || !state.cosmosCamera.inspectId) return;
+    const universe = cameraInspectionUniverse();
+    const galaxy = universe?.galaxies.find((candidate) => candidate.id === state.cosmosCamera.inspectId);
+    if (!galaxy) return;
+    const pose = galaxyPose(universe, galaxy);
+    state.cosmosCamera.targetX = pose.x;
+    state.cosmosCamera.targetY = pose.y;
+  }
+
   function updatePlayButton() {
     const button = $('#play-button');
     button.classList.toggle('is-playing', state.playing);
@@ -1577,12 +1748,22 @@
 
   function cosmosUniforms(universe, sharedUniverse, correlation, renderOptions = {}) {
     const { genome } = universe;
+    const flowField = MathX.spacetimeFieldParameters?.(universe) || {
+      fieldPhase: 0,
+      fieldDirection: 1,
+      twistAmplitude: 0.05
+    };
     const reciprocal = renderOptions.effect === 'mutual' ? renderOptions.reciprocal : null;
     const mutualStrength = reciprocal ? MathX.clamp(renderOptions.strength ?? 1) : 0;
     const goldenPhase = reciprocal ? (renderOptions.elapsed || 0) * 0.001 : 0;
     return {
       uTime: performance.now() * 0.001,
       uAge: state.age,
+      uFlowPhase: spacetimePhase(),
+      uFlowStrength: visualSpacetimeStrength(),
+      uFlowFieldPhase: flowField.fieldPhase,
+      uFlowFieldDirection: flowField.fieldDirection,
+      uFlowTwistAmplitude: flowField.twistAmplitude,
       uAspect: 1,
       uSeed: seedVector(genome.seed),
       uSharedSeed: seedVector((sharedUniverse || universe).genome.seed),
@@ -1800,7 +1981,7 @@
   }
 
   function drawHaloProxy(p, marker, zoom) {
-    const { galaxy, universeId, x, y, radius } = marker;
+    const { galaxy, universeId, x, y, radius, pose } = marker;
     const halo = galaxy.haloProxy;
     if (!halo || radius < 0.7) return;
     const targeted = cameraTargetsGalaxy(universeId, galaxy.id);
@@ -1820,7 +2001,7 @@
       p.point(offsetX, offsetY);
     }
     p.translate(offsetX, offsetY);
-    p.rotate(halo.rotation);
+    p.rotate(pose.haloRotation);
     p.noFill();
     for (let shell = 1; shell <= 4; shell += 1) {
       const shellScale = 0.38 + shell * 0.155;
@@ -1842,7 +2023,7 @@
     p.pop();
   }
 
-  function drawAnnularMorphology(p, universe, galaxy, galaxyIndex, radius, birthFade) {
+  function drawAnnularMorphology(p, universe, galaxy, galaxyIndex, radius, birthFade, pose) {
     const morphology = galaxy.morphology;
     const subtype = morphology.subtype;
     const random = MathX.mulberry32((universe.genome.seed ^ Math.imul(galaxyIndex + 1, 0x6c8e9cf5)) >>> 0);
@@ -1861,11 +2042,12 @@
     const startAngle = random() * MathX.TAU;
     const completeness = morphology.completeness;
     const ringAxis = morphology.axisRatio;
+    const rotationDelta = pose.selfRotation - galaxy.rotation;
 
     // Host structures establish which luminous plane the annulus is crossing.
     if (subtype === 'POLAR_RING') {
       p.push();
-      p.rotate(galaxy.rotation);
+      p.rotate(pose.selfRotation);
       p.noFill();
       p.stroke(244, 185, 95, (68 + birthFade * 78) * GALAXY_STRUCTURE_OPACITY);
       p.strokeWeight(Math.max(0.7, Math.min(2.2, radius * 0.055)));
@@ -1876,7 +2058,7 @@
       p.pop();
     } else if (subtype === 'RESONANCE_RING') {
       p.push();
-      p.rotate(galaxy.rotation);
+      p.rotate(pose.selfRotation);
       p.stroke(244, 185, 95, (82 + birthFade * 92) * GALAXY_STRUCTURE_OPACITY);
       p.strokeWeight(Math.max(0.8, Math.min(3, radius * 0.09)));
       p.line(-radius * 1.08, 0, radius * 1.08, 0);
@@ -1884,7 +2066,7 @@
     }
 
     p.push();
-    p.rotate(morphology.planeAngle);
+    p.rotate(morphology.planeAngle + rotationDelta);
     p.noFill();
     const ringColor = subtype === 'HOAG_LIKE' || subtype === 'POLAR_RING'
       ? [154, 184, 255]
@@ -1974,7 +2156,7 @@
 
     if (radius > 16) {
       for (let satellite = 0; satellite < galaxy.satelliteCount; satellite += 1) {
-        const angle = random() * MathX.TAU;
+        const angle = random() * MathX.TAU + pose.satellitePhase;
         const orbit = radius * (2.4 + random() * 3.4);
         p.stroke(150, 194, 244, 72 + random() * 100);
         p.strokeWeight(0.65 + random());
@@ -1983,7 +2165,7 @@
     }
   }
 
-  function drawGalaxyMorphology(p, universe, galaxy, galaxyIndex, radius, birthFade) {
+  function drawGalaxyMorphology(p, universe, galaxy, galaxyIndex, radius, birthFade, pose) {
     const warm = galaxy.temperature;
     const red = 170 + warm * 85;
     const green = 205 - warm * 22;
@@ -1991,7 +2173,7 @@
     p.noFill();
 
     if (MathX.isAnnularGalaxy?.(galaxy)) {
-      drawAnnularMorphology(p, universe, galaxy, galaxyIndex, radius, birthFade);
+      drawAnnularMorphology(p, universe, galaxy, galaxyIndex, radius, birthFade, pose);
       return;
     }
 
@@ -2002,7 +2184,7 @@
       return;
     }
 
-    p.rotate(galaxy.rotation);
+    p.rotate(pose.selfRotation);
     p.stroke(red, green, blue, (75 + birthFade * 135) * GALAXY_STRUCTURE_OPACITY);
     p.strokeWeight(Math.max(0.7, Math.min(2.4, radius * 0.08)));
     p.ellipse(0, 0, radius * 2.1, radius * 2.1 * galaxy.ellipticity);
@@ -2060,7 +2242,7 @@
 
       if (radius > 16) {
         for (let satellite = 0; satellite < galaxy.satelliteCount; satellite += 1) {
-          const angle = random() * MathX.TAU;
+          const angle = random() * MathX.TAU + pose.satellitePhase;
           const orbit = radius * (2.3 + random() * 3.2);
           p.stroke(150, 194, 244, 75 + random() * 95);
           p.strokeWeight(0.65 + random());
@@ -2115,16 +2297,17 @@
     for (let index = 0; index < universe.galaxies.length; index += 1) {
       const galaxy = universe.galaxies[index];
       if (state.age < galaxy.birth) continue;
-      const screen = MathX.cosmicFieldToScreen(galaxy.x, galaxy.y, view, aspect);
+      const pose = galaxyPose(universe, galaxy);
+      const screen = MathX.cosmicFieldToScreen(pose.x, pose.y, view, aspect);
       const birthFade = MathX.clamp((state.age - galaxy.birth) * 12);
       const radiusWorld = 0.00055 + galaxy.size * 0.0007;
-      const radius = Math.max(0.55, radiusWorld / span * rect.h * birthFade);
+      const radius = Math.max(0.55, radiusWorld / span * rect.h * birthFade * pose.breath);
       const marginX = Math.min(0.45, (radius * 6) / rect.w);
       const marginY = Math.min(0.45, (radius * 6) / rect.h);
       if (screen.x < -marginX || screen.x > 1 + marginX || screen.y < -marginY || screen.y > 1 + marginY) continue;
       const x = rect.x + screen.x * rect.w - p.width / 2;
       const y = rect.y + screen.y * rect.h - p.height / 2;
-      markers.push({ galaxy, universeId: universe.id, x, y, radius, birthFade, index });
+      markers.push({ galaxy, universeId: universe.id, x, y, radius, birthFade, index, pose });
     }
 
     p.push();
@@ -2136,7 +2319,15 @@
       markers.forEach((marker) => {
         p.push();
         p.translate(marker.x, marker.y);
-        drawGalaxyMorphology(p, universe, marker.galaxy, marker.index, marker.radius, marker.birthFade);
+        drawGalaxyMorphology(
+          p,
+          universe,
+          marker.galaxy,
+          marker.index,
+          marker.radius,
+          marker.birthFade,
+          marker.pose
+        );
         p.pop();
       });
     }
@@ -2294,6 +2485,9 @@
       uTime: performance.now() * 0.001,
       uAccent: accent,
       uContrast: 1.08,
+      uFlowPhase: spacetimePhase(),
+      uFlowStrength: visualSpacetimeStrength(),
+      uFlowSpin: (state.selected || ambientUniverse).genome.metrics.spin,
       uIterations: state.iterations
     });
   }
@@ -2361,17 +2555,42 @@
   }
 
   function makeFallbackFractal(p) {
-    const key = `${state.view.x.toFixed(7)}:${state.view.y.toFixed(7)}:${state.view.scale.toFixed(7)}:${state.iterations}`;
+    const activeUniverse = state.selected || ambientUniverse;
+    const aspect = state.layout.source.w / Math.max(1, state.layout.source.h);
+    const flowSteps = state.reducedMotion ? 64 : 128;
+    const flowStep = Math.round(spacetimePhase() / MathX.TAU * flowSteps) % flowSteps;
+    const flowPhase = flowStep / flowSteps * MathX.TAU;
+    const flowStrength = Math.round(visualSpacetimeStrength() * 10) / 10;
+    const flowSpin = activeUniverse.genome.metrics.spin;
+    const key = [
+      state.view.x.toFixed(7),
+      state.view.y.toFixed(7),
+      state.view.scale.toFixed(7),
+      aspect.toFixed(6),
+      state.iterations,
+      flowStrength > 0 ? `${flowStep}:${flowStrength.toFixed(3)}:${flowSpin.toFixed(4)}` : 'still'
+    ].join(':');
     if (state.fallbackImage && state.fallbackKey === key) return state.fallbackImage;
-    const width = 180;
-    const height = 180;
+    // The temporal CPU lens refreshes four times per modeled second. A lighter
+    // raster keeps that fallback responsive; the still preview retains detail.
+    const width = flowStrength > 0 ? 120 : 180;
+    const height = width;
+    const sampleIterations = Math.min(flowStrength > 0 ? 56 : 80, state.iterations);
     const image = p.createImage(width, height);
     image.loadPixels();
-    const aspect = state.layout.source.w / Math.max(1, state.layout.source.h);
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
-        const c = MathX.screenToComplex(x / (width - 1), y / (height - 1), state.view, aspect);
-        const sample = MathX.mandelbrotSample(c.x, c.y, Math.min(80, state.iterations));
+        const displayC = MathX.screenToComplex(x / (width - 1), y / (height - 1), state.view, aspect);
+        const c = flowStrength > 0 && MathX.temporalMandelbrotCoordinate
+          ? MathX.temporalMandelbrotCoordinate(
+            displayC.x,
+            displayC.y,
+            flowPhase,
+            flowStrength,
+            flowSpin
+          )
+          : displayC;
+        const sample = MathX.mandelbrotSample(c.x, c.y, sampleIterations);
         const pixel = (y * width + x) * 4;
         const edge = sample.interior ? 0 : MathX.clamp(sample.normalized * 5 + (1 - sample.orbitTrap) * 0.3);
         image.pixels[pixel] = sample.interior ? 2 : 20 + edge * 35;
@@ -2421,6 +2640,12 @@
       ? [255, 210, 124]
       : (role === 'mutual' ? [255, 232, 166] : [235, 214, 173]);
     const haloColor = role === 'original' || role === 'standard' ? [85, 214, 232] : [244, 185, 95];
+    const flowAmount = visualSpacetimeStrength();
+    const flowContext = flowAmount > 0 ? {
+      amount: flowAmount,
+      phase: spacetimePhase(),
+      parameters: MathX.spacetimeFieldParameters?.(universe)
+    } : { amount: 0 };
 
     state.cosmosFramePasses.push({
       universeId: universe.id,
@@ -2439,8 +2664,10 @@
     for (let index = 1; index < universe.attractor.length; index += 8) {
       const a = universe.attractor[index - 1];
       const b = universe.attractor[index];
-      const aScreen = MathX.cosmicFieldToScreen(a.x, a.y, cosmosView, cosmosAspect);
-      const bScreen = MathX.cosmicFieldToScreen(b.x, b.y, cosmosView, cosmosAspect);
+      const flowedA = fieldSpacetimePosition(universe, a.x, a.y, flowContext);
+      const flowedB = fieldSpacetimePosition(universe, b.x, b.y, flowContext);
+      const aScreen = MathX.cosmicFieldToScreen(flowedA.x, flowedA.y, cosmosView, cosmosAspect);
+      const bScreen = MathX.cosmicFieldToScreen(flowedB.x, flowedB.y, cosmosView, cosmosAspect);
       if (aScreen.x < 0 || aScreen.x > 1 || aScreen.y < 0 || aScreen.y > 1
         || bScreen.x < 0 || bScreen.x > 1 || bScreen.y < 0 || bScreen.y > 1) continue;
       p.stroke(...fieldColor);
@@ -2455,16 +2682,17 @@
       universe.galaxies.forEach((galaxy, index) => {
         const targeted = cameraTargetsGalaxy(universe.id, galaxy.id);
         if ((index % 2 && !targeted) || galaxy.birth > state.age) return;
-        const screen = MathX.cosmicFieldToScreen(galaxy.x, galaxy.y, cosmosView, cosmosAspect);
+        const pose = galaxyPose(universe, galaxy);
+        const screen = MathX.cosmicFieldToScreen(pose.x, pose.y, cosmosView, cosmosAspect);
         if (screen.x < 0 || screen.x > 1 || screen.y < 0 || screen.y > 1) return;
         const x = cosmos.x + screen.x * cosmos.w;
         const y = cosmos.y + screen.y * cosmos.h;
-        const radius = Math.max(1, (0.00055 + galaxy.size * 0.0007) / cosmosSpan * cosmos.h);
+        const radius = Math.max(1, (0.00055 + galaxy.size * 0.0007) / cosmosSpan * cosmos.h * pose.breath);
         if (state.layers.halos && galaxy.haloProxy) {
           const halo = galaxy.haloProxy;
           p.push();
           p.translate(x + halo.offsetX * radius * 2.4, y + halo.offsetY * radius * 2.4);
-          p.rotate(halo.rotation);
+          p.rotate(pose.haloRotation);
           p.noFill();
           p.stroke(haloColor[0], haloColor[1], haloColor[2], 42);
           p.strokeWeight(0.7);
@@ -2475,7 +2703,7 @@
           if (MathX.isAnnularGalaxy?.(galaxy)) {
             p.push();
             p.translate(x, y);
-            p.rotate(galaxy.morphology.planeAngle);
+            p.rotate(galaxy.morphology.planeAngle + pose.selfRotation - galaxy.rotation);
             p.noFill();
             p.stroke(starColor[0], starColor[1], starColor[2], 175);
             p.strokeWeight(Math.max(1, Math.min(4, radius * galaxy.morphology.ringWidth)));
@@ -2490,6 +2718,19 @@
             p.stroke(starColor[0], starColor[1], starColor[2], 130);
             p.strokeWeight(Math.max(1, Math.min(6, radius * 0.65)));
             p.point(x, y);
+          }
+          if (radius > 2 && galaxy.satelliteCount > 0) {
+            const satelliteRandom = MathX.mulberry32(MathX.fnv1a(
+              `${universe.genome.seedHex}|${galaxy.id}|safe-satellites@1`
+            ));
+            const visibleSatellites = Math.min(6, galaxy.satelliteCount);
+            for (let satellite = 0; satellite < visibleSatellites; satellite += 1) {
+              const angle = satelliteRandom() * MathX.TAU + pose.satellitePhase;
+              const orbit = radius * (2.3 + satelliteRandom() * 3.2);
+              p.stroke(starColor[0], starColor[1], starColor[2], 115 + satelliteRandom() * 70);
+              p.strokeWeight(0.7 + satelliteRandom() * 0.7);
+              p.point(x + Math.cos(angle) * orbit, y + Math.sin(angle) * orbit * 0.76);
+            }
           }
         }
         if (state.layers.tension && (galaxy.tensionRank < 6 || targeted)) {
@@ -2745,6 +2986,8 @@
           event.preventDefault();
           state.contextLost = true;
           state.playing = false;
+          beginSpacetimeTransition(false);
+          updateSpacetimeUI();
           showToast('GPU context lost. Your universes are safe; waiting for restoration…', 6000);
           announce('GPU context lost. Simulation paused; universe data is safe.');
         });
@@ -2779,6 +3022,12 @@
           state.age = Math.min(1, state.age + Math.min(50, p.deltaTime) * 0.00032);
           if (state.age >= 1) state.playing = false;
           if (p.frameCount % 4 === 0) updateAgeUI();
+        }
+        updateSpacetime(p.deltaTime || 16.67);
+        followSpacetimeInspection();
+        if (p.frameCount % 6 === 0) {
+          updateSpacetimeUI();
+          if (state.tool === 'probe') updateProbe(state.pointer.x, state.pointer.y, true);
         }
         updateCosmosCamera(p.deltaTime || 16.67);
         updateFractalTourCamera(p.deltaTime || 16.67);
@@ -2931,10 +3180,27 @@
     readout.setAttribute('aria-hidden', String(!(visible && inside)));
     if (!visible || !inside) return;
     const c = eventToComplex(x, y);
-    const sample = MathX.mandelbrotSample(c.x, c.y, state.iterations);
+    const activeUniverse = state.selected || ambientUniverse;
+    const flowProbeStrength = state.sourceVisual === 'mandelbrot' ? visualSpacetimeStrength() : 0;
+    const temporalC = MathX.temporalMandelbrotCoordinate
+      ? MathX.temporalMandelbrotCoordinate(
+        c.x,
+        c.y,
+        spacetimePhase(),
+        flowProbeStrength,
+        activeUniverse.genome.metrics.spin
+      )
+      : c;
+    const sample = MathX.mandelbrotSample(temporalC.x, temporalC.y, state.iterations);
     readout.style.left = `${Math.min(x + 14, state.layout.source.w - 145)}px`;
     readout.style.top = `${Math.min(y + 14, state.layout.source.h - 58)}px`;
-    $('#probe-coordinate').textContent = `c ${complexLabel(c)}`;
+    const coordinate = $('#probe-coordinate');
+    coordinate.textContent = flowProbeStrength > 0.001
+      ? `Cτ ${complexLabel(temporalC)}`
+      : `c ${complexLabel(c)}`;
+    coordinate.title = flowProbeStrength > 0.001
+      ? `Display coordinate c ${complexLabel(c)} mapped through the temporal lens`
+      : '';
     $('#probe-iteration').textContent = sample.interior
       ? `bounded through ${state.iterations} iterations`
       : `smooth escape ${sample.smooth.toFixed(3)}`;
@@ -3064,6 +3330,7 @@
     });
     $('#fork-button').addEventListener('click', forkTwin);
     $('#play-button').addEventListener('click', togglePlaying);
+    $('#spacetime-button').addEventListener('click', toggleSpacetimeFlow);
 
     const ageControl = $('#age-control');
     ageControl.addEventListener('input', () => {
@@ -3124,9 +3391,17 @@
       state.cosmosViews.clear();
       state.cosmosCamera = makeCosmosCamera();
       state.age = 0;
+      Object.assign(state.spacetime, {
+        active: false,
+        time: 0,
+        strength: 0,
+        rampFrom: 0,
+        rampElapsed: 0
+      });
       renderArchive();
       updateSelectedUI();
       updateGenomeUI(null);
+      updateSpacetimeUI();
       $('#empty-callout').classList.remove('is-hidden');
       showToast('Session archive cleared. This cannot remove exported genome files.');
     });
@@ -3206,6 +3481,7 @@
       if (event.key.toLowerCase() === 'n') newGenome();
       if (event.key.toLowerCase() === 'f') resetFractalView();
       if (event.key.toLowerCase() === 'b') forkTwin();
+      if (event.key.toLowerCase() === 't' && !event.repeat) toggleSpacetimeFlow();
       if ((event.key === '+' || event.key === '=') && state.selected) {
         const rect = activeCosmosRect();
         zoomCosmosAt(rect.x + rect.w / 2, rect.y + rect.h / 2, 0.5, { rect });
@@ -3233,10 +3509,12 @@
   wireUI();
   renderArchive();
   updateAgeUI();
+  updateSpacetimeUI();
   updateGenomeUI(null);
   setupP5();
   window.ButterflyFXDiagnostics = Object.freeze({
     renderOnce: () => state.p?.redraw(),
+    setReducedMotion: (enabled) => { state.reducedMotion = Boolean(enabled); },
     resetUniverseCamera: () => resetCosmosCamera({ quiet: true, immediate: true }),
     setUniverseCamera: (view) => setCosmosCameraTarget(view, { immediate: true }),
     tourUniverseCamera: () => tourCosmosCamera(performance.now()),
@@ -3247,6 +3525,7 @@
       const activeCosmosUniverse = renderedCosmosUniverse(now);
       const inspectedUniverse = cameraInspectionUniverse(now);
       const inspected = inspectedUniverse?.galaxies.find((galaxy) => galaxy.id === state.cosmosCamera.inspectId) || null;
+      const inspectedPose = inspected ? galaxyPose(inspectedUniverse, inspected) : null;
       return ({
       webglReady: state.webglReady,
       webgl2: state.webgl2,
@@ -3264,6 +3543,15 @@
       },
       buddhabrotError: state.buddhabrotError,
       focusView: state.focusView,
+      modelAge: state.age,
+      emergencePlaying: state.playing,
+      reducedMotion: state.reducedMotion,
+      spacetimeActive: state.spacetime.active,
+      spacetimeTime: state.spacetime.time,
+      spacetimePhase: spacetimePhase(),
+      spacetimeStrength: state.spacetime.strength,
+      spacetimeVisualStrength: visualSpacetimeStrength(),
+      spacetimeCycleSeconds: SPACETIME_CYCLE_SECONDS,
       screensaverActive: state.screensaver.active,
       screensaverView: state.screensaver.view,
       screensaverGenerationCount: state.screensaver.generationCount,
@@ -3301,6 +3589,9 @@
         universeId: inspectedUniverse.id,
         x: inspected.x,
         y: inspected.y,
+        flowX: inspectedPose.x,
+        flowY: inspectedPose.y,
+        flowRotation: inspectedPose.selfRotation,
         type: inspected.type,
         morphology: inspected.morphology,
         haloProxy: inspected.haloProxy,

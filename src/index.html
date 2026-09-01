@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Butterfly FX — Universe Loom</title>
-  <link rel="stylesheet" href="./styles.css?v=observatory-20260831d">
+  <link rel="stylesheet" href="./styles.css?v=spacetime-20260901a">
 </head>
 <body>
   <div class="app-shell">
@@ -126,7 +126,7 @@
 
       <section class="instrument-stage figure-plate" id="instrument-stage" aria-label="Interactive complex-source and universe canvas">
         <div id="canvas-host" tabindex="0" role="application" aria-describedby="canvas-instructions"></div>
-        <p class="sr-only" id="canvas-instructions">Choose a Mandelbrot escape map or Buddhabrot orbit-density map for the source pane. Drag on the source pane to create a universe. Scroll over it to magnify complex parameter space. Scroll over the universe pane to magnify its structure, and drag there to roam. Press plus or minus to change universe magnification and zero to frame the full universe.</p>
+        <p class="sr-only" id="canvas-instructions">Choose a Mandelbrot escape map or Buddhabrot orbit-density map for the source pane. Drag on the source pane to create a universe. Scroll over it to magnify complex parameter space. Scroll over the universe pane to magnify its structure, and drag there to roam. Press plus or minus to change universe magnification, zero to frame the full universe, and T to toggle Spacetime Flow.</p>
 
         <div class="stage-label source-stage-label">
           <span id="source-stage-title">MANDELBROT / SOURCE</span>
@@ -295,6 +295,11 @@
       <div class="epoch-track">
         <div class="epoch-heading">
           <span>MODEL TIME / EMERGENCE</span>
+          <button type="button" class="spacetime-button" id="spacetime-button" aria-label="Start Spacetime Flow" aria-pressed="false" title="Animate the time-extended Mandelbrot family and its universe (T)">
+            <i aria-hidden="true"><b></b></i>
+            <span>SPACETIME</span>
+            <output id="spacetime-status">STILL</output>
+          </button>
           <output id="age-label">0.00 · INITIAL FIELD</output>
         </div>
         <input id="age-control" type="range" min="0" max="1" step="0.001" value="0" aria-label="Model age">
@@ -345,7 +350,8 @@
         <section id="note-mandelbrot">
           <span class="note-type measured">MATHEMATICALLY MEASURED</span>
           <h3>01. A line becomes a fractal spectrum</h3>
-          <p>Both source views evaluate <code>zₙ₊₁ = zₙ² + c</code>. Mandelbrot colors each starting value <code>c</code> by its escape behavior. Buddhabrot instead accumulates the paths of many escaping orbits into a progressive traffic-density image. It is another view of the same iteration, not a different fractal.</p>
+          <p>Both source views ordinarily evaluate <code>zₙ₊₁ = zₙ² + c</code>. Mandelbrot colors each starting value <code>c</code> by its escape behavior. Buddhabrot instead accumulates the paths of many escaping orbits into a progressive traffic-density image. It is another view of the same iteration, not a different fractal.</p>
+          <p><b>Spacetime Flow</b> gives the parameter plane a cyclic conformal coordinate: <code>Cτ(c) = c / (1 + λ(τ)c)</code>, then evaluates <code>zₙ₊₁ = zₙ² + Cτ(c)</code>, where <code>λ(τ) = A·e^(i2πτ/32)</code> and the small affine amplitude <code>A</code> increases linearly with the active universe’s measured spin signal. Each frame is a smooth Möbius reparameterization <code>Cτ⁻¹(M)</code> of the classical Mandelbrot set—not a claim that the set physically moves. Switching flow off eases <code>A</code> back to zero. Buddhabrot and genome sampling remain canonical <code>z² + c</code>.</p>
           <p>The pixel meanings differ: a Mandelbrot location is the parameter <code>c</code>, while a Buddhabrot location is somewhere an escaping <code>z</code> orbit visited. The drawing overlay deliberately reuses that numbered complex grid as <code>c</code> in both modes, so switching the microscope changes what guides your eye—not the genome rule.</p>
           <p>Your line is resampled by arc length, so drawing speed does not change its genome. In either visual mode, the engine reads the drawn complex coordinates and records smooth escape time, interior occupancy, orbit-trap distance, boundary crossings, and signal roughness.</p>
           <p>The boundary contains structure at every visible scale. Sampling across it produces abrupt changes from one nearby parameter to the next. That is parameter sensitivity—not, by itself, the atmospheric “butterfly effect.”</p>
@@ -368,6 +374,7 @@ dz/dt = xy − βz</pre>
           <span class="note-type analogy">PHYSICS-INSPIRED ANALOGY</span>
           <h3>04. Correlated phase voices</h3>
           <p>The attractor supplies deterministic phases for a multi-scale procedural density field. In a Butterfly Twin, the Phase Link dial preserves some large-scale modes while allowing small-scale structure to differ. The retained similarity is classical phase correlation—an “entanglement” metaphor, never quantum entanglement.</p>
+          <p>During Spacetime Flow, one pauseable 32-second phase applies a bounded, periodic displacement to the field and to every galaxy proxy. The field-scale twist increases linearly with the genome’s spin channel; each galaxy adds a deterministic local epicycle and disk rotation derived from the same seed. This keeps motion coherent and replayable without pretending to integrate gravity.</p>
           <p>This is where multiple lines become interesting: a woven bundle contributes several phase voices, so its large forms emerge from interference rather than from one seed alone.</p>
         </section>
         <section id="note-darkmatter">
@@ -384,13 +391,13 @@ dz/dt = xy − βz</pre>
           <p>The violet → cyan → amber → white scale is an order or “negentropy” proxy: it tracks coherent, collapsed organization relative to the initial procedural field. It is not negative thermodynamic entropy; the simulated system has no complete heat or information accounting.</p>
           <p>Annular systems use several visibly different channels. Collisional rings behave like outward density waves after an impact; resonance rings collect around bar-driven orbit families; polar rings rotate in a strongly tilted plane; Hoag-like rings separate an old core from a young outer annulus; unresolved annuli deliberately keep competing histories alive.</p>
           <p><b>Formation Tension</b> ranks galaxy proxies whose mass, birth time, ring support, halo alignment, spiral order, turbulence, spin, or thermal state fit this toy field unusually poorly. A high magenta score means “the visible evidence does not select a clean history here,” not “a galaxy like this cannot exist.” It is an internal consistency diagnostic, not an astronomical probability.</p>
-          <p>Real galaxies additionally require gas hydrodynamics, radiative cooling, star formation, black holes, mergers, chemistry, and feedback across immense ranges of scale. Here they are luminous summaries of collapsed regions.</p>
+          <p>Real galaxies additionally require gas hydrodynamics, radiative cooling, star formation, black holes, mergers, chemistry, and feedback across immense ranges of scale. Here they are luminous summaries of collapsed regions. Their Spacetime Flow paths are analytic visual advection—not calculated trajectories or an N-body solution.</p>
         </section>
         <section id="note-limits">
           <span class="note-type warning">BOUNDARY OF THE CLAIM</span>
           <h3>07. What the app can honestly teach</h3>
           <p>Simple deterministic rules can create multiscale structure. Nearby initial conditions can diverge. Hidden fields can organize visible matter. Macroscopic form can emerge without a designer placing every part. Those are real shared ideas.</p>
-          <p>The app does not demonstrate that the Mandelbrot set caused cosmology, that dark matter is chaotic, that universes are quantum-entangled, or that this is a precision N-body simulation. A material ring galaxy is also different from an Einstein ring, which is a lensed image of a more distant source. This is an instrument for intuition and art.</p>
+          <p>The app does not demonstrate that the Mandelbrot set caused cosmology, that dark matter is chaotic, that universes are quantum-entangled, that Spacetime Flow is motion through a physical fourth dimension, or that this is a precision N-body simulation. A material ring galaxy is also different from an Einstein ring, which is a lensed image of a more distant source. This is an instrument for intuition and art.</p>
           <p><b>It is deterministic, but it is not cryptography and it is not reversible.</b> Arc-length resampling, summary statistics, finite escape measurements, a non-cryptographic hash, clamping, and image tone mapping all discard information. A bottled genome can replay its stored strand; a rendered universe cannot uniquely reveal the line that produced it.</p>
         </section>
       </article>
@@ -409,17 +416,18 @@ dz/dt = xy − βz</pre>
 
   <dialog id="help-dialog" class="modal-dialog help-dialog" aria-labelledby="help-dialog-title">
     <div class="dialog-topline">
-      <div><span>FOUR MOVES</span><h2 id="help-dialog-title">HOW TO GROW A UNIVERSE</h2></div>
+      <div><span>FIVE MOVES</span><h2 id="help-dialog-title">HOW TO GROW A UNIVERSE</h2></div>
       <button class="dialog-close icon-button" aria-label="Close help">×</button>
     </div>
     <ol>
       <li><i>01</i><div><b>CHOOSE A SOURCE MICROSCOPE</b><p>Mandelbrot maps which starts escape; Buddhabrot progressively maps where escaped trajectories travel. They share a numbered complex grid, though their pixels mean different things.</p></div></li>
       <li><i>02</i><div><b>DRAW THROUGH IT</b><p>Drag a line across the boundary. Branch mode ignites on release; Weave mode lets several strands interfere.</p></div></li>
       <li><i>03</i><div><b>LET STRUCTURE EMERGE</b><p>Play model time. Watch density collect into contours, filaments, halo knots, and luminous galaxies.</p></div></li>
-      <li><i>04</i><div><b>DIVE INTO THE CONSEQUENCE</b><p>Scroll or double-click over the universe, then drag to roam. Deeper scales resolve galaxy arms, luminous rings, stellar knots, cyan potential contours, and magenta formation-tension flags.</p></div></li>
+      <li><i>04</i><div><b>LET IT FLOW THROUGH TIME</b><p>Choose Spacetime Flow in the model-time ribbon, or press T. One shared mathematical phase reshapes the source family while the field, galaxies, rings, and satellites move together.</p></div></li>
+      <li><i>05</i><div><b>DIVE INTO THE CONSEQUENCE</b><p>Scroll or double-click over the universe, then drag to roam. Deeper scales resolve galaxy arms, luminous rings, stellar knots, cyan potential contours, and magenta formation-tension flags.</p></div></li>
     </ol>
     <div class="shortcut-grid">
-      <span><kbd>D</kbd> draw</span><span><kbd>H</kbd> pan</span><span><kbd>P</kbd> probe</span><span><kbd>B</kbd> butterfly twin</span><span><kbd>N</kbd> new genome</span><span><kbd>SPACE</kbd> play / pause</span><span><kbd>+</kbd> universe dive</span><span><kbd>−</kbd> universe retreat</span><span><kbd>0</kbd> frame universe</span>
+      <span><kbd>D</kbd> draw</span><span><kbd>H</kbd> pan</span><span><kbd>P</kbd> probe</span><span><kbd>B</kbd> butterfly twin</span><span><kbd>N</kbd> new genome</span><span><kbd>SPACE</kbd> emergence</span><span><kbd>T</kbd> spacetime flow</span><span><kbd>+</kbd> universe dive</span><span><kbd>−</kbd> universe retreat</span><span><kbd>0</kbd> frame universe</span>
     </div>
   </dialog>
 
@@ -465,9 +473,9 @@ dz/dt = xy − βz</pre>
   <div class="sr-only" id="live-region" aria-live="polite"></div>
 
   <script src="./vendor/p5.min.js"></script>
-  <script src="./simulation.js"></script>
-  <script src="./shaders.js?v=observatory-20260831d"></script>
+  <script src="./simulation.js?v=spacetime-20260901a"></script>
+  <script src="./shaders.js?v=spacetime-20260901a"></script>
   <script src="./buddhabrot.js"></script>
-  <script src="./app.js?v=observatory-20260831d"></script>
+  <script src="./app.js?v=spacetime-20260901a"></script>
 </body>
 </html>

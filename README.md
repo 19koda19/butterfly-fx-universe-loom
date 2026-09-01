@@ -21,6 +21,7 @@ The same app runs as a static browser edition for GitHub Pages.
 - An optional magenta `Formation Tension` diagnostic that calls out galaxy proxies whose mass, birth time, ring support, halo alignment, spiral order, turbulence, spin, or thermal state strain the toy model’s own causal mapping. It is not a real-world impossibility score.
 - `Both`, `Source`, and `Universe` compositions plus a fullscreen Autogen screensaver that continually draws, births, evolves, and archives new worlds. Its default dual-pane choreography dives into a contributing source coordinate and an unusual galaxy about every five seconds, then reframes both. Mandelbrot remains the default microscope and its tour favors long-escape, high-contrast boundary points; an explicitly selected Buddhabrot remains selected instead.
 - Model-time playback, layer controls, archive cards, PNG capture, and portable JSON genome bottles.
+- A separate `SPACETIME` flow control that runs a pauseable 32-second conformal Mandelbrot lens and drives bounded, deterministic field advection, galaxy spin, local epicycles, halo precession, breathing, and satellite orbits from one shared phase.
 - Live WebGL/Electron diagnostics, context-loss handling, and a usable CPU Safe Preview when WebGL is unavailable.
 - An in-app science manual that distinguishes measured mathematics, invented mappings, physics-inspired approximations, emergent output, and the boundary of the claim.
 
@@ -34,6 +35,17 @@ zₙ₊₁ = zₙ² + c
 
 - **Mandelbrot** assigns each starting parameter `c` a color from whether and how its orbit escapes. It is immediate, stable, and useful for tracing the familiar boundary.
 - **Buddhabrot** keeps only sampled values of `c` whose orbits escape, then counts where their intermediate `z` values travel. It is an escaped-orbit traffic-density image of the same iteration—not a second fractal law.
+
+`SPACETIME` deliberately adds a visual time coordinate without calling it a physical fourth dimension. At phase `τ`, the Mandelbrot shader maps the displayed coordinate through
+
+```text
+Cτ(c) = c / (1 + λ(τ)c)
+λ(τ) = A · exp(i 2πτ / 32)
+A = s · (0.045 + 0.085 · spin)
+zₙ₊₁ = zₙ² + Cτ(c)
+```
+
+Here `s` is the eased flow strength. The small affine amplitude `A` increases linearly with the active genome’s measured spin signal. Each frame is therefore a conformal Möbius reparameterization `Cτ⁻¹(M)` of the classical Mandelbrot set. The same phase turns the generated field and galaxy proxies; switching flow off eases `A` and every visual displacement back to zero. Buddhabrot accumulation, stored path coordinates, and genome measurements continue to use canonical `z² + c`.
 
 The Buddhabrot view streams deterministic orbit batches into an additive WebGL2 accumulation target and tone-maps the growing density on the GPU. It therefore begins sparse and noisy, then progressively resolves structure while it remains open. Its finite sample count, iteration ceiling, accumulation texture, and floating-point precision all affect the image. It is an estimator, not an exact probability field. If the required WebGL2 path is unavailable, the app keeps the Mandelbrot source active.
 
@@ -87,6 +99,7 @@ Explicit strand roles add a small, visible bias to the corresponding measured ch
 This is a deterministic generative analogy, not a cosmological theory or precision simulation.
 
 - A Mandelbrot pixel is a complex parameter `c`, not a point in spacetime.
+- Spacetime Flow is a cyclic conformal lens plus analytic visual advection. It is not motion through a physical fourth dimension, an integration of gravity, or evidence that the Mandelbrot set changes in time.
 - Mandelbrot and Buddhabrot are two renderings of `zₙ₊₁ = zₙ² + c`; neither is a physical map of the early universe. The progressively sampled Buddhabrot is not unique at finite sample count.
 - Parameter sensitivity at the Mandelbrot boundary is not itself the atmospheric butterfly effect. The inserted strange-attractor twin is the app’s sensitive-dependence layer.
 - Real dark matter is not known to consist of bubbles. The bubble layer shows equal-density/equal-potential contours.
@@ -145,10 +158,11 @@ Open <http://127.0.0.1:4173>. The browser edition keeps creation, comparison, fu
 | `F` | Restore the active source frame |
 | `+` / `−` / `0` | Dive / retreat / frame the universe camera |
 | `Space` | Play or pause model time |
+| `T` | Start or pause the continuous 32-second Spacetime Flow cycle |
 | `Ctrl/Cmd + Z` | Remove the latest unignited strand |
 | `Escape` | Leave Autogen/fullscreen or close a dialog |
 
-The top-right `VIEW` control cycles between the relational split view, a full source microscope, and a full universe. `AUTOGEN ⛶` opens the configurable screensaver. `MODEL POTENTIAL` toggles the thin cyan toy-potential contours. `FORMATION TENSION` toggles the magenta diagnostic, while `INSPECT STRANGE RING` targets the selected universe’s highest-tension annular system and opens it at galaxy scale.
+The top-right `VIEW` control cycles between the relational split view, a full source microscope, and a full universe. `AUTOGEN ⛶` opens the configurable screensaver. The `SPACETIME` button beside the model-age readout controls continuous motion independently of the one-way emergence timeline. With reduced motion enabled at the operating-system level, its deformation is capped at 30%, its phase runs at one-fifth speed, and winding rotations become gentle oscillations. `MODEL POTENTIAL` toggles the thin cyan toy-potential contours. `FORMATION TENSION` toggles the magenta diagnostic, while `INSPECT STRANGE RING` targets the selected universe’s highest-tension annular system and opens it at galaxy scale.
 
 ## Test and package
 
@@ -160,7 +174,7 @@ npm run dist       # platform installer/image
 npm run pages:prepare
 ```
 
-The deterministic tests cover Mandelbrot and cosmic-camera coordinate transforms, cursor anchoring and camera bounds, arc-length resampling, genome/galaxy reproducibility, five-channel annular morphology, halo-support metadata, formation-tension behavior, epsilon twins, Mandelbrot interior/exterior classification, and portable serialization. The Electron smoke harness additionally checks GPU shader compilation, wheel zoom, pan, reset, per-universe camera memory, dual-pane Autogen choreography, fullscreen behavior, and all three compositions.
+The deterministic tests cover Mandelbrot and cosmic-camera coordinate transforms, cursor anchoring and camera bounds, temporal Möbius coordinates, closed and bounded galaxy spacetime poses, arc-length resampling, genome/galaxy reproducibility, five-channel annular morphology, halo-support metadata, formation-tension behavior, epsilon twins, Mandelbrot interior/exterior classification, and portable serialization. The Electron smoke harness additionally checks GPU shader compilation, wheel zoom, pan, reset, per-universe camera memory, dual-pane Autogen choreography, fullscreen behavior, and all three compositions.
 
 ## Project layout
 
